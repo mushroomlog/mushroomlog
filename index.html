@@ -3,19 +3,18 @@
 <html lang="zh">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
     <meta name="theme-color" content="#506634" />
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="apple-mobile-web-app-title" content="蘑菇日志">
     <link rel="apple-touch-icon" href="https://img.icons8.com/fluency/192/000000/mushroom.png">
     
-    <link rel="manifest" href="manifest.json" />
     <title>蘑菇日志 - 种植追踪器</title>
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // Process Shim - 防止 process.env 引用导致崩溃
+      // 预设环境对象，防止第三方库在浏览器端寻找 process 时报错
       window.process = { env: { API_KEY: "" } };
       
       tailwind.config = {
@@ -33,78 +32,53 @@
                 700: '#64803d',
                 800: '#506634',
                 900: '#42542e',
-              },
-              myco: {
-                light: '#F3F4F6',
-                DEFAULT: '#4B5563',
-                dark: '#1F2937'
               }
             }
           }
         }
       }
     </script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap" rel="stylesheet">
     <style>
       body { 
         font-family: 'Inter', sans-serif; 
         background-color: #f6f9f0; 
         overscroll-behavior-y: none; 
-        -webkit-tap-highlight-color: transparent;
-      }
-      /* 适配刘海屏 */
-      header {
-        padding-top: env(safe-area-inset-top);
-      }
-      .fixed-bottom {
-        padding-bottom: env(safe-area-inset-bottom);
       }
       #root:empty::before {
-        content: 'Loading Mycelium...';
+        content: '正在接入菌丝网络...';
         display: flex;
         align-items: center;
         justify-content: center;
         height: 100vh;
         color: #64803d;
-        font-weight: bold;
-        font-size: 1.2rem;
+        font-weight: 900;
+        font-size: 1.1rem;
+        letter-spacing: 0.05em;
+      }
+      .fixed-bottom {
+        padding-bottom: env(safe-area-inset-bottom);
       }
     </style>
   <script type="importmap">
 {
   "imports": {
-    "lucide-react": "https://aistudiocdn.com/lucide-react@^0.555.0",
-    "react/": "https://aistudiocdn.com/react@^19.2.0/",
-    "react": "https://aistudiocdn.com/react@^19.2.0",
-    "react-dom/": "https://aistudiocdn.com/react-dom@^19.2.0/",
-    "@google/genai": "https://aistudiocdn.com/@google/genai@^1.30.0",
-    "recharts": "https://aistudiocdn.com/recharts@^3.5.0",
-    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@2.39.3"
+    "react": "https://esm.sh/react@^19.2.3",
+    "react-dom/": "https://esm.sh/react-dom@^19.2.3/",
+    "react/": "https://esm.sh/react@^19.2.3/",
+    "lucide-react": "https://esm.sh/lucide-react@^0.562.0",
+    "@google/genai": "https://esm.sh/@google/genai@^1.34.0",
+    "recharts": "https://esm.sh/recharts@^3.6.0",
+    "@supabase/supabase-js": "https://esm.sh/@supabase/supabase-js@^2.89.0",
+    "vite": "https://esm.sh/vite@^7.3.0",
+    "@vitejs/plugin-react": "https://esm.sh/@vitejs/plugin-react@^5.1.2"
   }
 }
 </script>
 </head>
   <body>
     <div id="root"></div>
-    <!-- 显式加载入口模块 -->
-    <script type="module" src="index.tsx"></script>
-    <script>
-      // 注册 Service Worker 以支持自动更新
-      if ('serviceWorker' in navigator) {
-        window.addEventListener('load', () => {
-          navigator.serviceWorker.register('/sw.js').then(reg => {
-            console.log('SW registered');
-            reg.onupdatefound = () => {
-              const installingWorker = reg.installing;
-              installingWorker.onstatechange = () => {
-                if (installingWorker.state === 'installed' && navigator.serviceWorker.controller) {
-                  window.location.reload();
-                }
-              };
-            };
-          }).catch(err => console.log('SW registration failed:', err));
-        });
-      }
-    </script>
+    <!-- Vite 模式下直接引入 tsx 即可 -->
+    <script type="module" src="/index.tsx"></script>
   </body>
 </html>
