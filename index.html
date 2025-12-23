@@ -14,7 +14,7 @@
     
     <script src="https://cdn.tailwindcss.com"></script>
     <script>
-      // 预设环境对象，防止第三方库在浏览器端寻找 process 时报错
+      // 预设环境对象，防止第三方库报错
       window.process = { env: { API_KEY: "" } };
       
       tailwind.config = {
@@ -78,7 +78,6 @@
 </head>
   <body>
     <div id="root"></div>
-    <!-- Vite 模式下直接引入 tsx 即可 -->
     <script type="module" src="/index.tsx"></script>
   </body>
 </html>
