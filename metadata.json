@@ -1,0 +1,7 @@
+{
+  "name": "Mushroom Log",
+  "description": "A comprehensive tracking tool for home mushroom cultivators featuring AI-powered growth analysis and environmental monitoring.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}
