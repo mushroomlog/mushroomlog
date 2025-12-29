@@ -12,7 +12,7 @@ import Setup from './components/Setup';
 import SettingsManager from './components/SettingsManager';
 import InsightsDashboard from './components/InsightsDashboard';
 import Notebook from './components/Notebook';
-import { LayoutDashboard, PlusCircle, Loader2, Settings as SettingsIcon, PieChart, Notebook as NotebookIcon } from 'lucide-react';
+import { LayoutDashboard, PlusCircle, Loader2, Settings as SettingsIcon, PieChart, Notebook as NotebookIcon, Download, X } from 'lucide-react';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -24,6 +24,10 @@ const App: React.FC = () => {
   const [loadingData, setLoadingData] = useState(false);
   const [hasDbConfig, setHasDbConfig] = useState(false);
 
+  // PWA Install State
+  const [deferredPrompt, setDeferredPrompt] = useState<any>(null);
+  const [showInstallBanner, setShowInstallBanner] = useState(false);
+
   const [userConfigs, setUserConfigs] = useState<UserConfigs>({
     species: DEFAULT_SPECIES_LIST,
     operations: DEFAULT_OPERATION_LIST,
@@ -33,6 +37,30 @@ const App: React.FC = () => {
   });
 
   const t = useTranslation(userConfigs.language || 'zh');
+
+  useEffect(() => {
+    // 监听 PWA 安装事件
+    window.addEventListener('beforeinstallprompt', (e) => {
+      e.preventDefault();
+      setDeferredPrompt(e);
+      setShowInstallBanner(true);
+    });
+
+    window.addEventListener('appinstalled', () => {
+      setShowInstallBanner(false);
+      setDeferredPrompt(null);
+    });
+  }, []);
+
+  const handleInstallClick = async () => {
+    if (!deferredPrompt) return;
+    deferredPrompt.prompt();
+    const { outcome } = await deferredPrompt.userChoice;
+    if (outcome === 'accepted') {
+      setShowInstallBanner(false);
+    }
+    setDeferredPrompt(null);
+  };
 
   useEffect(() => {
     setHasDbConfig(isConfigured());
@@ -62,14 +90,12 @@ const App: React.FC = () => {
   const fetchData = async () => {
     setLoadingData(true);
     if (session?.user?.id) {
-       console.log("App: 正在拉取云端数据...");
        try {
          const [batchData, configData] = await Promise.all([
            getBatches(),
            getUserConfigs(session.user.id)
          ]);
          
-         // 同步逻辑 (保持配置项完整性)
          let needsUpdate = false;
          let updatedRecipeTypes = [...(configData.recipeTypes || [])];
 
@@ -81,18 +107,14 @@ const App: React.FC = () => {
          });
 
          if (needsUpdate) {
-           try {
-             configData.recipeTypes = updatedRecipeTypes;
-             await saveUserConfigs(session.user.id, configData);
-           } catch (syncError: any) {
-             console.warn("后台配置同步失败:", syncError.message || JSON.stringify(syncError));
-           }
+           configData.recipeTypes = updatedRecipeTypes;
+           await saveUserConfigs(session.user.id, configData);
          }
 
          setBatches(batchData);
          setUserConfigs(configData);
        } catch (err: any) {
-         console.error("fetchData 全局异常:", err.message || JSON.stringify(err));
+         console.error("fetchData 全局异常:", err.message);
        }
     }
     setLoadingData(false);
@@ -157,7 +179,28 @@ const App: React.FC = () => {
          <span className="font-bold text-earth-800">{t('header_title')}</span>
          <button onClick={handleSignOut} className="text-xs text-earth-500 hover:text-red-500">{t('sign_out')}</button>
       </header>
+      
+      {/* PWA 安装引导条 */}
+      {showInstallBanner && (
+        <div className="bg-earth-800 text-white px-4 py-3 flex items-center justify-between sticky top-[49px] z-50 animate-in slide-in-from-top duration-300">
+          <div className="flex items-center gap-3">
+            <div className="bg-white/20 p-2 rounded-lg">
+              <Download size={18} />
+            </div>
+            <div>
+              <p className="text-xs font-black uppercase tracking-widest">安装 App</p>
+              <p className="text-[10px] opacity-80">将蘑菇日志添加到桌面，体验更好</p>
+            </div>
+          </div>
+          <div className="flex items-center gap-2">
+            <button onClick={handleInstallClick} className="bg-white text-earth-900 px-4 py-2 rounded-xl text-[10px] font-black uppercase tracking-widest shadow-lg active:scale-95 transition-all">立即安装</button>
+            <button onClick={() => setShowInstallBanner(false)} className="p-2 text-white/50 hover:text-white"><X size={18}/></button>
+          </div>
+        </div>
+      )}
+
       <main className="max-w-3xl mx-auto p-4 md:p-6 min-h-[calc(100vh-80px)]">{renderContent()}</main>
+      
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-earth-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-50">
         <div className="max-w-3xl mx-auto flex items-center p-2">
           <div className="grid grid-cols-5 w-full gap-1">
