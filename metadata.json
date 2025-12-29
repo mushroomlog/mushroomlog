@@ -1,0 +1,8 @@
+
+{
+  "name": "Mushroom Log",
+  "description": "A comprehensive tracking tool for home mushroom cultivators featuring environmental monitoring and generational lineage tracking.",
+  "requestFramePermissions": [
+    "camera"
+  ]
+}

@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect } from 'react';
-import { getBatches, getUserConfigs, deleteBatch, deleteBatchGroup, updateBatchGroup } from './services/storageService';
+import { getBatches, getUserConfigs, deleteBatchGroup, updateBatchGroup, saveUserConfigs } from './services/storageService';
 import { getSupabase, isConfigured } from './services/supabaseClient';
-import { Batch, TabView, UserConfigs, Language } from './types';
-import { DEFAULT_SPECIES_LIST, DEFAULT_OPERATION_LIST, DEFAULT_STATUS_LIST, useTranslation } from './constants';
+import { Batch, TabView, UserConfigs } from './types';
+import { DEFAULT_SPECIES_LIST, DEFAULT_OPERATION_LIST, DEFAULT_STATUS_LIST, DEFAULT_RECIPE_TYPES, useTranslation } from './constants';
 import Dashboard from './components/Dashboard';
 import GrowDetail from './components/GrowDetail';
 import OperationForm from './components/NewGrowForm';
@@ -11,7 +11,8 @@ import Auth from './components/Auth';
 import Setup from './components/Setup';
 import SettingsManager from './components/SettingsManager';
 import InsightsDashboard from './components/InsightsDashboard';
-import { LayoutDashboard, PlusCircle, LogOut, Loader2, Settings as SettingsIcon, PieChart } from 'lucide-react';
+import Notebook from './components/Notebook';
+import { LayoutDashboard, PlusCircle, Loader2, Settings as SettingsIcon, PieChart, Notebook as NotebookIcon } from 'lucide-react';
 
 const App: React.FC = () => {
   const [session, setSession] = useState<any>(null);
@@ -27,6 +28,7 @@ const App: React.FC = () => {
     species: DEFAULT_SPECIES_LIST,
     operations: DEFAULT_OPERATION_LIST,
     statuses: DEFAULT_STATUS_LIST,
+    recipeTypes: DEFAULT_RECIPE_TYPES,
     language: 'zh'
   });
 
@@ -60,12 +62,38 @@ const App: React.FC = () => {
   const fetchData = async () => {
     setLoadingData(true);
     if (session?.user?.id) {
-       const [batchData, configData] = await Promise.all([
-         getBatches(),
-         getUserConfigs(session.user.id)
-       ]);
-       setBatches(batchData);
-       setUserConfigs(configData);
+       console.log("App: 正在拉取云端数据...");
+       try {
+         const [batchData, configData] = await Promise.all([
+           getBatches(),
+           getUserConfigs(session.user.id)
+         ]);
+         
+         // 同步逻辑 (保持配置项完整性)
+         let needsUpdate = false;
+         let updatedRecipeTypes = [...(configData.recipeTypes || [])];
+
+         DEFAULT_RECIPE_TYPES.forEach(type => {
+           if (!updatedRecipeTypes.includes(type)) {
+             updatedRecipeTypes.push(type);
+             needsUpdate = true;
+           }
+         });
+
+         if (needsUpdate) {
+           try {
+             configData.recipeTypes = updatedRecipeTypes;
+             await saveUserConfigs(session.user.id, configData);
+           } catch (syncError: any) {
+             console.warn("后台配置同步失败:", syncError.message || JSON.stringify(syncError));
+           }
+         }
+
+         setBatches(batchData);
+         setUserConfigs(configData);
+       } catch (err: any) {
+         console.error("fetchData 全局异常:", err.message || JSON.stringify(err));
+       }
     }
     setLoadingData(false);
   };
@@ -76,7 +104,7 @@ const App: React.FC = () => {
 
   const renderContent = () => {
     if (loadingData && batches.length === 0 && currentView === TabView.DASHBOARD) {
-       return <div className="h-64 flex items-center justify-center text-earth-500"><Loader2 className="animate-spin mr-2"/> Loading...</div>;
+       return <div className="h-64 flex items-center justify-center text-earth-500"><Loader2 className="animate-spin mr-2"/> 加载中...</div>;
     }
 
     switch (currentView) {
@@ -94,14 +122,28 @@ const App: React.FC = () => {
         );
       case TabView.STATS:
         return <InsightsDashboard batches={batches} userConfigs={userConfigs} onNavigateToBatch={(b) => { setSelectedBatch(b); setCurrentView(TabView.BATCH_DETAIL); }} />;
+      case TabView.NOTEBOOK:
+        return <Notebook userId={session?.user?.id} userConfigs={userConfigs} onUpdateConfigs={async (c) => { setUserConfigs(c); await saveUserConfigs(session.user.id, c); }} />;
       case TabView.NEW_OPERATION:
-        return <OperationForm userId={session.user.id} userConfigs={userConfigs} onCancel={() => { setPreselectedParentId(undefined); setCurrentView(TabView.DASHBOARD); }} onSuccess={fetchData} initialParentId={preselectedParentId} existingBatches={batches} />;
+        return (
+          <OperationForm 
+            userId={session.user.id} 
+            userConfigs={userConfigs} 
+            onCancel={() => { setPreselectedParentId(undefined); setCurrentView(TabView.DASHBOARD); }} 
+            onSuccess={() => {
+                fetchData();
+                setCurrentView(TabView.DASHBOARD);
+            }} 
+            initialParentId={preselectedParentId} 
+            existingBatches={batches} 
+          />
+        );
       case TabView.BATCH_DETAIL:
-        return selectedBatch ? <GrowDetail userId={session.user.id} grow={selectedBatch} allBatches={batches} userConfigs={userConfigs} onBack={() => setCurrentView(TabView.DASHBOARD)} onUpdate={(b) => { setSelectedBatch(b); fetchData(); }} onDelete={() => { setSelectedBatch(null); setCurrentView(TabView.DASHBOARD); fetchData(); }} onContinue={(id) => { setPreselectedParentId(id); setCurrentView(TabView.NEW_OPERATION); }} onNavigateToBatch={(b) => setSelectedBatch(b)} /> : <div>Error</div>;
+        return selectedBatch ? <GrowDetail userId={session.user.id} grow={selectedBatch} allBatches={batches} userConfigs={userConfigs} onBack={() => setCurrentView(TabView.DASHBOARD)} onUpdate={(b) => { setSelectedBatch(b); fetchData(); }} onDelete={() => { setSelectedBatch(null); setCurrentView(TabView.DASHBOARD); fetchData(); }} onContinue={(id) => { setPreselectedParentId(id); setCurrentView(TabView.NEW_OPERATION); }} onNavigateToBatch={(b) => setSelectedBatch(b)} /> : <div>错误</div>;
       case TabView.SETTINGS:
-        return <SettingsManager userId={session.user.id} configs={userConfigs} onUpdate={setUserConfigs} onClose={() => setCurrentView(TabView.DASHBOARD)} />;
+        return <SettingsManager userId={session.user.id} configs={userConfigs} onUpdate={setUserConfigs} onRefresh={fetchData} onClose={() => setCurrentView(TabView.DASHBOARD)} />;
       default:
-        return <div>Not Found</div>;
+        return <div>未找到</div>;
     }
   };
 
@@ -118,7 +160,7 @@ const App: React.FC = () => {
       <main className="max-w-3xl mx-auto p-4 md:p-6 min-h-[calc(100vh-80px)]">{renderContent()}</main>
       <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-earth-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] z-50">
         <div className="max-w-3xl mx-auto flex items-center p-2">
-          <div className="grid grid-cols-4 w-full gap-1">
+          <div className="grid grid-cols-5 w-full gap-1">
             <button onClick={() => setCurrentView(TabView.DASHBOARD)} className={`flex flex-col items-center justify-center gap-1 py-2 rounded-lg transition-colors ${currentView === TabView.DASHBOARD ? 'text-earth-700 bg-earth-50' : 'text-earth-400'}`}>
               <LayoutDashboard size={24} /><span className="text-[10px] font-medium uppercase">{t('nav_log')}</span>
             </button>
@@ -126,7 +168,10 @@ const App: React.FC = () => {
               <PieChart size={24} /><span className="text-[10px] font-medium uppercase">{t('nav_stats')}</span>
             </button>
             <button onClick={() => { setPreselectedParentId(undefined); setCurrentView(TabView.NEW_OPERATION); }} className={`flex flex-col items-center justify-center gap-1 py-2 rounded-lg transition-colors ${currentView === TabView.NEW_OPERATION ? 'text-earth-700 bg-earth-50' : 'text-earth-400'}`}>
-              <PlusCircle size={24} /><span className="text-[10px] font-medium uppercase">{t('nav_new')}</span>
+              <PlusCircle size={28} className="text-earth-600" /><span className="text-[10px] font-medium uppercase">{t('nav_new')}</span>
+            </button>
+            <button onClick={() => setCurrentView(TabView.NOTEBOOK)} className={`flex flex-col items-center justify-center gap-1 py-2 rounded-lg transition-colors ${currentView === TabView.NOTEBOOK ? 'text-earth-700 bg-earth-50' : 'text-earth-400'}`}>
+              <NotebookIcon size={24} /><span className="text-[10px] font-medium uppercase">{t('nav_notebook')}</span>
             </button>
             <button onClick={() => setCurrentView(TabView.SETTINGS)} className={`flex flex-col items-center justify-center gap-1 py-2 rounded-lg transition-colors ${currentView === TabView.SETTINGS ? 'text-earth-700 bg-earth-50' : 'text-earth-400'}`}>
               <SettingsIcon size={24} /><span className="text-[10px] font-medium uppercase">{t('nav_config')}</span>
