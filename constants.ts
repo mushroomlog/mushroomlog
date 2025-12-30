@@ -123,7 +123,7 @@ export const getStylesForColor = (hex?: string, fallbackTheme?: string) => {
   if (hex) {
     return {
       bg: { backgroundColor: `${hex}1A`, color: hex, borderColor: `${hex}33` },
-      badge: { backgroundColor: `${hex}1A`, color: hex, borderColor: `${hex}33` },
+      badge: { backgroundColor: `${hex}26`, color: hex, borderColor: `${hex}4D` },
       text: { color: hex },
       border: { borderColor: hex },
       solid: { backgroundColor: hex, color: '#fff' }

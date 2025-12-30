@@ -181,7 +181,7 @@ const Dashboard: React.FC<DashboardProps> = ({ batches, userConfigs, onSelectBat
           {sortedDates.map((date) => (
             <div key={date}>
               <div className="flex items-center gap-3 mb-5 px-1">
-                 <span className="text-[10px] font-black text-earth-400 uppercase tracking-widest whitespace-nowrap">{getDayLabel(date)}</span>
+                 <span className="text-[10px] font-black text-earth-600 uppercase tracking-widest whitespace-nowrap">{getDayLabel(date)}</span>
                  <div className="h-[1px] flex-1 bg-earth-100"></div>
               </div>
               
@@ -262,15 +262,15 @@ const Dashboard: React.FC<DashboardProps> = ({ batches, userConfigs, onSelectBat
                                                     onClick={() => onSelectBatch(batch)}
                                                     className="flex items-center gap-2 rounded-lg border border-earth-100 bg-earth-50/30 px-3 py-2 text-[10px] font-black text-earth-700 hover:bg-white hover:border-earth-800 transition-all active:scale-95"
                                                 >
-                                                    <span className="opacity-50 font-mono">{batch.displayId}</span>
+                                                    <span className="opacity-70 font-mono">{batch.displayId}</span>
                                                     {batch.imageUrls && batch.imageUrls.length > 0 && <ImageIcon size={12} className="text-earth-400" />}
                                                 </button>
                                             ))}
                                         </div>
 
                                         <div className="flex items-center justify-between text-[10px] font-black border-t border-earth-50 pt-4">
-                                            <div className="flex items-center gap-2 text-earth-400 uppercase tracking-widest">
-                                                <Layers size={14} className="text-earth-200"/>
+                                            <div className="flex items-center gap-2 text-earth-700 uppercase tracking-widest">
+                                                <Layers size={14} className="text-earth-300"/>
                                                 <span>{isHarvestGroup ? `${totalQty} g` : `数量: ${totalQty}`}</span>
                                             </div>
                                             <button 

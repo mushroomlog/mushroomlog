@@ -3,7 +3,7 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Batch, UserConfigs, Unit } from '../types';
 import { updateBatch, uploadBatchImage, deleteBatchImage } from '../services/storageService';
 import { getIconForOp, getStylesForColor, useTranslation } from '../constants';
-import { ArrowLeft, CheckCircle, Loader2, Check, GitBranch, Pencil, Trash2, X, Camera, Image as ImageIcon, AlertCircle, Clock, Save } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Loader2, Check, GitBranch, Pencil, Trash2, X, Camera, Image as ImageIcon, AlertCircle, Clock, Save, Scale } from 'lucide-react';
 
 interface GrowDetailProps {
   userId: string;
@@ -123,6 +123,13 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
 
   const fullLineage = [...lineage, batch];
 
+  const totalHarvestWeight = fullLineage.reduce((sum, item) => {
+    if (item.operationType.toLowerCase().includes('harvest')) {
+      return sum + item.quantity;
+    }
+    return sum;
+  }, 0);
+
   return (
     <div className="pb-24">
       <div className="flex items-center justify-between mb-8">
@@ -131,7 +138,7 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
         </button>
         <div className="flex gap-2">
           {!isEditing && (
-            <button onClick={() => setIsEditing(true)} className="p-2 text-earth-500 hover:text-earth-900 bg-white border border-earth-200 rounded-lg shadow-sm">
+            <button onClick={() => setIsEditing(true)} className="p-2 text-earth-600 hover:text-earth-900 bg-white border border-earth-200 rounded-lg shadow-sm">
               <Pencil size={20} />
             </button>
           )}
@@ -156,29 +163,31 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
           <div className="grid grid-cols-2 gap-6">
             <div className="space-y-6">
               <div>
-                <label className="text-[10px] font-black text-earth-500 uppercase block tracking-widest mb-1">菌种</label>
+                <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">菌种</label>
                 <div className="font-bold text-earth-900">{batch.species}</div>
               </div>
               <div>
-                <label className="text-[10px] font-black text-earth-500 uppercase block tracking-widest mb-1">创建日期</label>
+                <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">创建日期</label>
                 <div className="font-bold text-earth-900">{batch.createdDate}</div>
               </div>
             </div>
             <div className="space-y-6">
               <div>
-                <label className="text-[10px] font-black text-earth-500 uppercase block tracking-widest mb-1">步骤</label>
+                <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">步骤</label>
                 <div className="font-bold text-earth-900">{batch.operationType}</div>
               </div>
               <div>
-                <label className="text-[10px] font-black text-earth-500 uppercase block tracking-widest mb-1">数量</label>
-                <div className="font-bold text-earth-900">{batch.quantity} {batch.unit}</div>
+                <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">数量</label>
+                <div className="font-bold text-earth-900">
+                  {batch.operationType.toLowerCase().includes('harvest') ? `${batch.quantity} g` : `数量: ${batch.quantity}`}
+                </div>
               </div>
             </div>
           </div>
 
           {batch.notes && !isEditing && (
             <div className="mt-8 pt-8 border-t border-earth-50">
-               <label className="text-[10px] font-black text-earth-500 uppercase block tracking-widest mb-2">备注</label>
+               <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-2">备注</label>
                <p className="text-sm text-earth-900 leading-relaxed">{batch.notes}</p>
             </div>
           )}
@@ -215,7 +224,7 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
                   {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
                   {isSaving ? '保存中...' : '确认修改'}
                 </button>
-                <button onClick={() => setIsEditing(false)} className="px-6 bg-earth-50 text-earth-500 rounded-xl font-black uppercase tracking-widest text-[10px]">取消</button>
+                <button onClick={() => setIsEditing(false)} className="px-6 bg-earth-50 text-earth-600 rounded-xl font-black uppercase tracking-widest text-[10px]">取消</button>
               </div>
             </div>
           )}
@@ -274,6 +283,7 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
                 const isCurrent = item.id === batch.id;
                 const nextItem = fullLineage[i + 1];
                 const daysDiff = nextItem ? getDiffDays(item.createdDate, nextItem.createdDate) : 0;
+                const isHarvest = item.operationType.toLowerCase().includes('harvest');
                 
                 return (
                   <div key={item.id} className="relative">
@@ -286,7 +296,7 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
                         {i < fullLineage.length - 1 && (
                           <div className="w-0.5 h-24 bg-earth-100 relative">
                              {daysDiff > 0 && (
-                               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-earth-100 text-earth-700 px-2 py-0.5 rounded-full text-[9px] font-black border border-white whitespace-nowrap z-10">
+                               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-earth-100 text-earth-800 px-2 py-0.5 rounded-full text-[9px] font-black border border-white whitespace-nowrap z-10 shadow-sm">
                                  +{daysDiff}D
                                </div>
                              )}
@@ -295,13 +305,15 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
                       </div>
                       
                       <div className={`flex-1 p-5 rounded-2xl border transition-all duration-300 shadow-sm ${isCurrent ? 'bg-earth-800 text-white border-earth-800' : 'bg-earth-50 group-hover:bg-earth-100 border-transparent group-hover:border-earth-200'}`}>
-                        <div className={`text-[10px] font-black font-mono mb-1 ${isCurrent ? 'opacity-60' : 'text-earth-600'}`}>
+                        <div className={`text-[10px] font-black font-mono mb-1 ${isCurrent ? 'opacity-60' : 'text-earth-700'}`}>
                           {item.displayId} {isCurrent && '(CURRENT)'}
                         </div>
-                        <div className="text-sm font-black mb-2">{item.operationType}</div>
+                        <div className={`text-sm font-black mb-2 ${isCurrent ? 'text-white' : 'text-earth-900'}`}>{item.operationType}</div>
                         <div className="flex justify-between items-center text-[10px] font-bold">
-                           <span className={isCurrent ? 'opacity-80' : 'text-earth-600'}>{item.createdDate}</span>
-                           <span className={isCurrent ? 'opacity-80' : 'text-earth-600'}>数量: {item.quantity} {item.unit}</span>
+                           <span className={isCurrent ? 'opacity-80' : 'text-earth-700'}>{item.createdDate}</span>
+                           <span className={isCurrent ? 'opacity-80' : 'text-earth-700'}>
+                             {isHarvest ? `${item.quantity} g` : `数量: ${item.quantity}`}
+                           </span>
                         </div>
                       </div>
                     </div>
@@ -309,6 +321,17 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
                 );
               })}
            </div>
+
+           {totalHarvestWeight > 0 && (
+             <div className="mt-10 pt-6 border-t border-earth-100 flex justify-between items-center animate-in fade-in slide-in-from-bottom-2 duration-500">
+                <div className="flex items-center gap-2 text-earth-600 font-black uppercase tracking-[0.1em] text-[10px]">
+                   <Scale size={16} className="text-earth-400" /> 总收获量
+                </div>
+                <div className="text-2xl font-black text-earth-900 tracking-tight">
+                  {totalHarvestWeight.toFixed(1)} <span className="text-xs font-bold text-earth-500 ml-0.5">g</span>
+                </div>
+             </div>
+           )}
         </div>
       )}
 
