@@ -39,23 +39,35 @@ const App: React.FC = () => {
   const t = useTranslation(userConfigs.language || 'zh');
 
   useEffect(() => {
-    // 监听 PWA 安装事件
-    window.addEventListener('beforeinstallprompt', (e) => {
+    const handleBeforeInstallPrompt = (e: Event) => {
+      // 阻止 Chrome 67 及更早版本自动显示提示
       e.preventDefault();
+      // 存放事件以备后用
       setDeferredPrompt(e);
+      // 更新 UI 通知用户可以安装 PWA
       setShowInstallBanner(true);
-    });
+      console.log('菌丝网络：安装提示已就绪');
+    };
+
+    window.addEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
 
     window.addEventListener('appinstalled', () => {
       setShowInstallBanner(false);
       setDeferredPrompt(null);
+      console.log('菌丝网络：App 已成功种植到桌面');
     });
+
+    return () => window.removeEventListener('beforeinstallprompt', handleBeforeInstallPrompt);
   }, []);
 
   const handleInstallClick = async () => {
-    if (!deferredPrompt) return;
+    if (!deferredPrompt) {
+      console.log('安装提示不可用');
+      return;
+    }
     deferredPrompt.prompt();
     const { outcome } = await deferredPrompt.userChoice;
+    console.log(`用户安装选择: ${outcome}`);
     if (outcome === 'accepted') {
       setShowInstallBanner(false);
     }
@@ -163,7 +175,7 @@ const App: React.FC = () => {
       case TabView.BATCH_DETAIL:
         return selectedBatch ? <GrowDetail userId={session.user.id} grow={selectedBatch} allBatches={batches} userConfigs={userConfigs} onBack={() => setCurrentView(TabView.DASHBOARD)} onUpdate={(b) => { setSelectedBatch(b); fetchData(); }} onDelete={() => { setSelectedBatch(null); setCurrentView(TabView.DASHBOARD); fetchData(); }} onContinue={(id) => { setPreselectedParentId(id); setCurrentView(TabView.NEW_OPERATION); }} onNavigateToBatch={(b) => setSelectedBatch(b)} /> : <div>错误</div>;
       case TabView.SETTINGS:
-        return <SettingsManager userId={session.user.id} configs={userConfigs} onUpdate={setUserConfigs} onRefresh={fetchData} onClose={() => setCurrentView(TabView.DASHBOARD)} />;
+        return <SettingsManager userId={session.user.id} configs={userConfigs} onUpdate={setUserConfigs} onRefresh={fetchData} onClose={() => setCurrentView(TabView.DASHBOARD)} installAvailable={!!deferredPrompt} onInstall={handleInstallClick} />;
       default:
         return <div>未找到</div>;
     }
@@ -180,7 +192,7 @@ const App: React.FC = () => {
          <button onClick={handleSignOut} className="text-xs text-earth-500 hover:text-red-500">{t('sign_out')}</button>
       </header>
       
-      {/* PWA 安装引导条 */}
+      {/* PWA 安装引导条 - 改进了触发逻辑 */}
       {showInstallBanner && (
         <div className="bg-earth-800 text-white px-4 py-3 flex items-center justify-between sticky top-[49px] z-50 animate-in slide-in-from-top duration-300">
           <div className="flex items-center gap-3">
@@ -188,8 +200,8 @@ const App: React.FC = () => {
               <Download size={18} />
             </div>
             <div>
-              <p className="text-xs font-black uppercase tracking-widest">安装 App</p>
-              <p className="text-[10px] opacity-80">将蘑菇日志添加到桌面，体验更好</p>
+              <p className="text-xs font-black uppercase tracking-widest">安装 蘑菇日志</p>
+              <p className="text-[10px] opacity-80">添加到桌面，体验原生 App 功能</p>
             </div>
           </div>
           <div className="flex items-center gap-2">
