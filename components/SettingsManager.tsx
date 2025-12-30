@@ -2,7 +2,7 @@
 import React, { useState, useEffect } from 'react';
 import { UserConfigs, SpeciesConfig, OperationConfig, StatusConfig, Batch, Language } from '../types';
 import { saveUserConfigs, updateBatchesForSpeciesChange, deleteImagesBeforeDate, getBatches, checkStorageHealth, listAllBuckets } from '../services/storageService';
-import { Trash2, Plus, Save, Loader2, X, Palette, Pencil, Check, FileDown, Database, ExternalLink, Table, Languages, Info, Activity, ShieldAlert, SearchCode, AlertCircle } from 'lucide-react';
+import { Trash2, Plus, Save, Loader2, X, Palette, Pencil, Check, FileDown, Database, ExternalLink, Table, Languages, Info, Activity, ShieldAlert, SearchCode, AlertCircle, Smartphone, Download } from 'lucide-react';
 import { useTranslation, getStylesForColor } from '../constants';
 
 interface SettingsManagerProps {
@@ -11,10 +11,11 @@ interface SettingsManagerProps {
   onUpdate: (newConfigs: UserConfigs) => void;
   onClose: () => void;
   onRefresh: () => Promise<void>;
+  installAvailable?: boolean;
+  onInstall?: () => void;
 }
 
-const SettingsManager: React.FC<SettingsManagerProps> = ({ userId, configs, onUpdate, onClose, onRefresh }) => {
-  // 核心：使用深拷贝初始化本地状态，确保不受外部重新渲染干扰
+const SettingsManager: React.FC<SettingsManagerProps> = ({ userId, configs, onUpdate, onClose, onRefresh, installAvailable, onInstall }) => {
   const [localConfigs, setLocalConfigs] = useState<UserConfigs>(() => JSON.parse(JSON.stringify(configs)));
   const [isSaving, setIsSaving] = useState(false);
   const [hasUnsavedChanges, setHasUnsavedChanges] = useState(false);
@@ -32,7 +33,6 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ userId, configs, onUp
   const [isCleaning, setIsCleaning] = useState(false);
   const [isExporting, setIsExporting] = useState(false);
 
-  // Storage Health Check State
   const [storageStatus, setStorageStatus] = useState<{ checked: boolean; ok: boolean; msg: string }>({ checked: false, ok: false, msg: '' });
   const [allBuckets, setAllBuckets] = useState<string[]>([]);
   const [isCheckingHealth, setIsCheckingHealth] = useState(false);
@@ -67,23 +67,16 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ userId, configs, onUp
   const handleGlobalSave = async () => {
     if (!userId || isSaving) return;
     setIsSaving(true);
-    
     try {
-      // 1. 处理菌种变动产生的级联更新
       for (const sp of localConfigs.species) {
           const original = configs.species.find(s => s.id === sp.id);
           if (original && (original.name !== sp.name || original.abbreviation !== sp.abbreviation)) {
               await updateBatchesForSpeciesChange(userId, original.name, sp.name, sp.abbreviation, original.abbreviation);
           }
       }
-
-      // 2. 执行核心保存
       await saveUserConfigs(userId, localConfigs);
-      
-      // 3. 同步到 App 内存并强制重新加载
       onUpdate(localConfigs);
       await onRefresh();
-      
       setHasUnsavedChanges(false);
       alert("配置保存成功！");
     } catch (e: any) {
@@ -95,27 +88,18 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ userId, configs, onUp
 
   const handleListItemAction = () => {
     if (!name.trim()) return;
-    
     const id = editingId || crypto.randomUUID();
     let nextConfigs = JSON.parse(JSON.stringify(localConfigs));
-
     if (activeTab === 'species') {
         const newItem: SpeciesConfig = { id, name: name.trim(), abbreviation: abbr.trim().toUpperCase() || name.substring(0, 2).toUpperCase(), colorHex: color };
-        nextConfigs.species = editingId 
-            ? nextConfigs.species.map((i: any) => i.id === id ? newItem : i)
-            : [...nextConfigs.species, newItem];
+        nextConfigs.species = editingId ? nextConfigs.species.map((i: any) => i.id === id ? newItem : i) : [...nextConfigs.species, newItem];
     } else if (activeTab === 'operations') {
         const newItem: OperationConfig = { id, name: name.trim(), colorHex: color };
-        nextConfigs.operations = editingId 
-            ? nextConfigs.operations.map((i: any) => i.id === id ? newItem : i)
-            : [...nextConfigs.operations, newItem];
+        nextConfigs.operations = editingId ? nextConfigs.operations.map((i: any) => i.id === id ? newItem : i) : [...nextConfigs.operations, newItem];
     } else if (activeTab === 'statuses') {
         const newItem: StatusConfig = { id, name: name.trim(), colorHex: color };
-        nextConfigs.statuses = editingId 
-            ? nextConfigs.statuses.map((i: any) => i.id === id ? newItem : i)
-            : [...nextConfigs.statuses, newItem];
+        nextConfigs.statuses = editingId ? nextConfigs.statuses.map((i: any) => i.id === id ? newItem : i) : [...nextConfigs.statuses, newItem];
     }
-
     setLocalConfigs(nextConfigs);
     setHasUnsavedChanges(true);
     setEditingId(null);
@@ -128,7 +112,6 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ userId, configs, onUp
     if (activeTab === 'species') nextConfigs.species = nextConfigs.species.filter((i: any) => i.id !== itemId);
     else if (activeTab === 'operations') nextConfigs.operations = nextConfigs.operations.filter((i: any) => i.id !== itemId);
     else if (activeTab === 'statuses') nextConfigs.statuses = nextConfigs.statuses.filter((i: any) => i.id !== itemId);
-
     setLocalConfigs(nextConfigs);
     setHasUnsavedChanges(true);
     setDeleteConfirmId(null);
@@ -144,9 +127,7 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ userId, configs, onUp
     <div className="pb-32">
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl font-black text-earth-900 tracking-tight">{t('nav_config')}</h1>
-        <div className="flex gap-2">
-            <button onClick={onClose} className="p-2 text-earth-500 hover:bg-earth-100 rounded-full transition-colors"><X size={24} /></button>
-        </div>
+        <button onClick={onClose} className="p-2 text-earth-500 hover:bg-earth-100 rounded-full transition-colors"><X size={24} /></button>
       </div>
 
       <div className="flex gap-1 mb-6 bg-earth-100 p-1.5 rounded-2xl overflow-x-auto scrollbar-hide">
@@ -163,18 +144,46 @@ const SettingsManager: React.FC<SettingsManagerProps> = ({ userId, configs, onUp
 
       <div className="min-h-[400px]">
         {activeTab === 'prefs' ? (
-            <div className="bg-white rounded-[32px] border border-earth-200 p-8 space-y-6 shadow-sm">
-                <div className="flex items-center justify-between">
+            <div className="space-y-4">
+                <div className="bg-white rounded-[32px] border border-earth-200 p-8 space-y-6 shadow-sm">
+                    <div className="flex items-center justify-between">
+                        <div className="flex items-center gap-4">
+                            <div className="p-3 bg-earth-50 rounded-2xl text-earth-600"><Languages size={24} /></div>
+                            <div>
+                                {localConfigs.language === 'en' && <p className="text-[10px] font-black uppercase tracking-widest text-earth-400 mb-0.5">Selection</p>}
+                                <span className="font-black text-earth-900 text-lg">{t('lang_toggle')}</span>
+                            </div>
+                        </div>
+                        <button onClick={toggleLanguage} className="bg-earth-900 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl active:scale-95 transition-all">
+                          {localConfigs.language === 'en' ? 'English' : '中文'}
+                        </button>
+                    </div>
+                </div>
+
+                {/* 手动安装 App 区域 */}
+                <div className="bg-white rounded-[32px] border border-earth-200 p-8 space-y-6 shadow-sm">
                     <div className="flex items-center gap-4">
-                        <div className="p-3 bg-earth-50 rounded-2xl text-earth-600"><Languages size={24} /></div>
-                        <div>
-                            {localConfigs.language === 'en' && <p className="text-[10px] font-black uppercase tracking-widest text-earth-400 mb-0.5">Selection</p>}
-                            <span className="font-black text-earth-900 text-lg">{t('lang_toggle')}</span>
+                        <div className="p-3 bg-blue-50 rounded-2xl text-blue-600"><Smartphone size={24} /></div>
+                        <div className="flex-1">
+                            <span className="font-black text-earth-900 text-lg">添加到主屏幕</span>
+                            <p className="text-[10px] text-earth-400 font-medium mt-1 uppercase tracking-widest">体验原生 App 级的全屏体验</p>
                         </div>
                     </div>
-                    <button onClick={toggleLanguage} className="bg-earth-900 text-white px-6 py-3 rounded-2xl font-black text-xs uppercase tracking-widest shadow-xl active:scale-95 transition-all">
-                      {localConfigs.language === 'en' ? 'English' : '中文'}
-                    </button>
+                    
+                    {installAvailable ? (
+                        <button onClick={onInstall} className="w-full py-5 bg-blue-600 text-white rounded-[24px] font-black uppercase tracking-widest text-xs shadow-xl active:scale-95 transition-all flex items-center justify-center gap-3">
+                            <Download size={18} /> 立即安装到手机桌面
+                        </button>
+                    ) : (
+                        <div className="p-5 bg-earth-50 border border-earth-100 rounded-[24px]">
+                            <p className="text-xs text-earth-500 leading-relaxed font-medium">
+                                <span className="font-black text-earth-900 block mb-1">未检测到安装提示</span>
+                                1. 请确认您正在使用手机 Chrome 浏览器。<br/>
+                                2. 如果已经安装过，请检查您的桌面或应用抽屉。<br/>
+                                3. 您也可以点击浏览器右上角的 <span className="bg-earth-200 px-1 rounded text-[10px]">三个点</span> 菜单，选择 <span className="font-bold">“添加到主屏幕”</span>。
+                            </p>
+                        </div>
+                    )}
                 </div>
             </div>
         ) : activeTab === 'data' ? (
