@@ -1,9 +1,9 @@
 
 import React, { useState, useEffect, useRef } from 'react';
 import { Batch, UserConfigs, Unit } from '../types';
-import { updateBatch, expandBatch, uploadBatchImage, deleteBatchImage } from '../services/storageService';
+import { updateBatch, uploadBatchImage, deleteBatchImage } from '../services/storageService';
 import { getIconForOp, getStylesForColor, useTranslation } from '../constants';
-import { ArrowLeft, Save, CheckCircle, ArrowDown, Loader2, Check, GitBranch, Pencil, Trash2, X, Camera, Image as ImageIcon, Maximize2, AlertCircle } from 'lucide-react';
+import { ArrowLeft, CheckCircle, Loader2, Check, GitBranch, Pencil, Trash2, X, Camera, Image as ImageIcon, AlertCircle, Clock, Save } from 'lucide-react';
 
 interface GrowDetailProps {
   userId: string;
@@ -56,253 +56,276 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
       if (parent) { ancestors.unshift(parent); current = parent; } else break;
       safety++;
     }
-    const getDescendants = (pid: string): Batch[] => {
-        const children = allBatches.filter(b => b.parentId === pid);
-        let res: Batch[] = [...children];
-        for (const child of children) res = [...res, ...getDescendants(child.id)];
-        return res;
-    };
-    const descendants = getDescendants(batch.id);
-    const fullLineage = [...ancestors, batch, ...descendants].sort((a, b) => new Date(a.createdDate).getTime() - new Date(b.createdDate).getTime());
-    setLineage(Array.from(new Set(fullLineage.map(b => b.id))).map(id => fullLineage.find(b => b.id === id)!));
+    setLineage(ancestors);
   }, [batch, allBatches]);
 
-  const handleFullSave = async () => {
+  const handleSave = async () => {
     setIsSaving(true);
-    let newDisplayId = batch.displayId;
-    if (editForm.species && editForm.createdDate && (editForm.species !== batch.species || editForm.createdDate !== batch.createdDate)) {
-        const spConfig = userConfigs.species.find(s => s.name === editForm.species);
-        const newAbbr = spConfig ? spConfig.abbreviation : editForm.species.substring(0, 2).toUpperCase();
-        const d = new Date(editForm.createdDate);
-        const dateCode = `${d.getFullYear().toString().slice(-2)}${(d.getMonth() + 1).toString().padStart(2, '0')}${d.getDate().toString().padStart(2, '0')}`;
-        const seqMatch = batch.displayId.match(/-(\d+)$/);
-        newDisplayId = `${dateCode}-${newAbbr}-${seqMatch ? seqMatch[1] : '01'}`;
-    }
-    const updatedBatch: Batch = { ...batch, ...editForm, displayId: newDisplayId, outcome, endDate: endDate || undefined } as Batch;
     try {
-      if (batch.quantity === 1 && (editForm.quantity || 1) > 1 && !editForm.operationType?.includes('Harvest')) {
-          await expandBatch(updatedBatch, editForm.quantity!, userId);
-          onDelete(); 
-      } else {
-          await updateBatch(updatedBatch);
-          onUpdate(updatedBatch);
-          setIsEditing(false);
-          setShowSuccess(true);
-          setTimeout(() => setShowSuccess(false), 2000);
-      }
-    } catch (e: any) { alert(`Failed: ${e.message}`); } finally { setIsSaving(false); }
+      const updated = {
+        ...batch,
+        ...editForm,
+        outcome,
+        endDate: endDate || undefined
+      } as Batch;
+      await updateBatch(updated);
+      onUpdate(updated);
+      setIsEditing(false);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSaving(false);
+    }
   };
 
-  const currentOpName = isEditing ? editForm.operationType : batch.operationType;
-  const currentSpeciesName = isEditing ? editForm.species : batch.species;
-
-  const opConfig = userConfigs.operations.find(op => op.name.toLowerCase() === currentOpName?.toLowerCase());
-  const opStyles = getStylesForColor(opConfig?.colorHex);
-  const OpIcon = getIconForOp(opConfig?.name || currentOpName);
-  
-  const speciesConfig = userConfigs.species.find(s => s.name.toLowerCase() === currentSpeciesName?.toLowerCase());
-  const speciesStyles = getStylesForColor(speciesConfig?.colorHex);
-
   const handleImageUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-    if (!e.target.files?.[0]) return;
-    const file = e.target.files[0];
+    if (!e.target.files || !e.target.files[0]) return;
     setIsUploading(true);
     setUploadError(null);
     try {
-        const url = await uploadBatchImage(batch.id, file, userId);
-        if (url) {
-            const updatedBatch = { ...batch, imageUrls: [...(batch.imageUrls || []), url] };
-            await updateBatch(updatedBatch);
-            onUpdate(updatedBatch);
-        }
-    } catch (error: any) { setUploadError(error.message); } finally { 
-        setIsUploading(false);
-        if (fileInputRef.current) fileInputRef.current.value = '';
+      const url = await uploadBatchImage(batch.id, e.target.files[0], userId);
+      if (url) {
+        const updated = { ...batch, imageUrls: [...(batch.imageUrls || []), url] };
+        await updateBatch(updated);
+        onUpdate(updated);
+      }
+    } catch (err: any) {
+      setUploadError(err.message);
+    } finally {
+      setIsUploading(false);
     }
   };
 
   const handleDeleteImage = async (url: string) => {
-    if (!window.confirm("确定删除吗？")) return;
+    if (!confirm(t('confirm_q'))) return;
     try {
-        await deleteBatchImage(url);
-        const updatedBatch = { ...batch, imageUrls: (batch.imageUrls || []).filter(imgUrl => imgUrl !== url) };
-        await updateBatch(updatedBatch);
-        onUpdate(updatedBatch);
-    } catch (error: any) { alert("删除失败"); }
+      await deleteBatchImage(url);
+      const updated = { ...batch, imageUrls: (batch.imageUrls || []).filter(u => u !== url) };
+      await updateBatch(updated);
+      onUpdate(updated);
+    } catch (err: any) {
+      alert("Delete failed");
+    }
   };
 
-  return (
-    <div className="space-y-6 pb-20">
-      {viewImage && (
-        <div className="fixed inset-0 z-50 bg-black/90 flex items-center justify-center p-4" onClick={() => setViewImage(null)}>
-           <img src={viewImage} alt="Full view" className="max-w-full max-h-[90vh] object-contain rounded-lg" />
-        </div>
-      )}
+  const getDiffDays = (d1: string, d2: string) => {
+    const start = new Date(d1);
+    const end = new Date(d2);
+    const diffTime = Math.abs(end.getTime() - start.getTime());
+    return Math.ceil(diffTime / (1000 * 60 * 60 * 24));
+  };
 
-      <div className="flex items-center justify-between">
-        <div className="flex items-center space-x-3">
-          <button onClick={onBack} className="p-2 hover:bg-earth-100 rounded-full transition-colors text-earth-800"><ArrowLeft size={24} /></button>
-          <div>
-            <h1 className="text-xl font-black text-earth-900 truncate tracking-tight">{batch.displayId}</h1>
-            {!isEditing && <span className={`text-[10px] font-black uppercase px-2 py-0.5 rounded border tracking-widest`} style={speciesStyles.badge}>{speciesConfig?.name || batch.species}</span>}
-          </div>
-        </div>
-        <div className="flex gap-2 items-center">
-           {!isEditing && (
-               <>
-                 <input type="file" ref={fileInputRef} className="hidden" accept="image/*" capture="environment" onChange={handleImageUpload} />
-                 <button onClick={() => { setUploadError(null); fileInputRef.current?.click(); }} className="p-2 bg-earth-800 text-white rounded-lg shadow active:scale-95 transition-all" disabled={isUploading}>
-                    {isUploading ? <Loader2 size={18} className="animate-spin" /> : <Camera size={18} />}
-                 </button>
-               </>
-           )}
-          <button onClick={() => setIsEditing(!isEditing)} className="p-2 text-earth-500 bg-white border border-earth-200 rounded-lg shadow-sm hover:bg-earth-50">{isEditing ? <X size={18} /> : <Pencil size={18} />}</button>
+  const opConfig = userConfigs.operations.find(op => op.name.toLowerCase() === batch.operationType.toLowerCase());
+  const opStyles = getStylesForColor(opConfig?.colorHex);
+  const Icon = getIconForOp(opConfig?.name || batch.operationType);
+
+  const fullLineage = [...lineage, batch];
+
+  return (
+    <div className="pb-24">
+      <div className="flex items-center justify-between mb-8">
+        <button onClick={onBack} className="p-2 hover:bg-earth-100 rounded-full transition-colors text-earth-800">
+          <ArrowLeft size={24} />
+        </button>
+        <div className="flex gap-2">
+          {!isEditing && (
+            <button onClick={() => setIsEditing(true)} className="p-2 text-earth-500 hover:text-earth-900 bg-white border border-earth-200 rounded-lg shadow-sm">
+              <Pencil size={20} />
+            </button>
+          )}
+          <button onClick={() => onContinue(batch.id)} className="flex items-center gap-2 bg-earth-800 text-white px-4 py-2 rounded-lg font-black text-[10px] uppercase tracking-widest shadow hover:bg-earth-900 active:scale-95 transition-all">
+            <GitBranch size={16} /> 接续
+          </button>
         </div>
       </div>
 
-      {uploadError && (
-          <div className="bg-red-50 border border-red-100 p-4 rounded-lg flex items-start gap-3">
-              <AlertCircle className="text-red-600 mt-0.5 shrink-0" size={16} />
-              <div className="flex-1">
-                  <p className="text-[10px] font-black text-red-800 uppercase tracking-widest">{uploadError}</p>
-              </div>
-          </div>
-      )}
-
-      <div className="bg-white p-6 rounded-lg border border-earth-200 shadow-sm relative overflow-hidden">
-        <div className="absolute top-0 right-0 p-3 rounded-bl-lg border-b border-l" style={opStyles.bg}><OpIcon size={24} style={{ color: opConfig?.colorHex }} /></div>
-        <div className="space-y-6">
-          {isEditing ? (
-            <div className="space-y-4 pr-10">
-               <div><label className="text-[10px] font-black text-earth-400 uppercase tracking-widest mb-1 ml-1 block">Stage</label><select value={editForm.operationType} onChange={(e) => setEditForm(prev => ({ ...prev, operationType: e.target.value }))} className="w-full p-3 bg-earth-50 border border-earth-200 rounded-lg text-sm font-bold outline-none">{userConfigs.operations.map(op => <option key={op.id} value={op.name}>{op.name}</option>)}</select></div>
-               <div><label className="text-[10px] font-black text-earth-400 uppercase tracking-widest mb-1 ml-1 block">Species</label><select value={editForm.species} onChange={(e) => setEditForm(prev => ({ ...prev, species: e.target.value }))} className="w-full p-3 bg-earth-50 border border-earth-200 rounded-lg text-sm font-bold outline-none">{userConfigs.species.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select></div>
-               <div className="grid grid-cols-2 gap-3">
-                  <div><label className="text-[10px] font-black text-earth-400 uppercase tracking-widest mb-1 ml-1 block">Date</label><input type="date" value={editForm.createdDate} onChange={(e) => setEditForm(prev => ({ ...prev, createdDate: e.target.value }))} className="w-full p-3 bg-earth-50 border border-earth-200 rounded-lg text-sm font-bold outline-none"/></div>
-                  <div><label className="text-[10px] font-black text-earth-400 uppercase tracking-widest mb-1 ml-1 block">Qty</label><input type="number" value={editForm.quantity} onChange={(e) => setEditForm(prev => ({ ...prev, quantity: Number(e.target.value) }))} className="w-full p-3 bg-earth-50 border border-earth-200 rounded-lg text-sm font-bold outline-none"/></div>
-               </div>
-               <button onClick={handleFullSave} disabled={isSaving} className="w-full bg-earth-800 text-white py-4 rounded-lg font-black uppercase tracking-widest flex items-center justify-center gap-2 shadow-lg active:scale-95 transition-transform">{isSaving ? <Loader2 className="animate-spin" size={18}/> : <Save size={18} />} {t('save')}</button>
+      <div className="bg-white rounded-[32px] border border-earth-200 shadow-sm overflow-hidden mb-6">
+        <div className="p-8">
+          <div className="flex items-center gap-6 mb-8">
+            <div style={opStyles.bg} className="p-5 rounded-3xl border border-earth-100/50">
+              <Icon size={32} />
             </div>
-          ) : (
-            <>
-              <div className="pr-10">
-                <label className="text-[10px] font-black text-earth-400 uppercase tracking-widest block mb-1">Growth Phase</label>
-                <p className="text-xl font-black text-earth-900 tracking-tight leading-none mb-1">{opConfig?.name || batch.operationType}</p>
-                <p className="text-xs font-bold text-earth-500">{new Date(batch.createdDate).toLocaleDateString()}</p>
+            <div>
+              <div className="text-[10px] font-black text-earth-600 uppercase tracking-widest mb-1">Batch ID</div>
+              <h2 className="text-2xl font-black text-earth-900 font-mono tracking-tight">{batch.displayId}</h2>
+            </div>
+          </div>
+
+          <div className="grid grid-cols-2 gap-6">
+            <div className="space-y-6">
+              <div>
+                <label className="text-[10px] font-black text-earth-500 uppercase block tracking-widest mb-1">菌种</label>
+                <div className="font-bold text-earth-900">{batch.species}</div>
               </div>
-              
+              <div>
+                <label className="text-[10px] font-black text-earth-500 uppercase block tracking-widest mb-1">创建日期</label>
+                <div className="font-bold text-earth-900">{batch.createdDate}</div>
+              </div>
+            </div>
+            <div className="space-y-6">
+              <div>
+                <label className="text-[10px] font-black text-earth-500 uppercase block tracking-widest mb-1">步骤</label>
+                <div className="font-bold text-earth-900">{batch.operationType}</div>
+              </div>
+              <div>
+                <label className="text-[10px] font-black text-earth-500 uppercase block tracking-widest mb-1">数量</label>
+                <div className="font-bold text-earth-900">{batch.quantity} {batch.unit}</div>
+              </div>
+            </div>
+          </div>
+
+          {batch.notes && !isEditing && (
+            <div className="mt-8 pt-8 border-t border-earth-50">
+               <label className="text-[10px] font-black text-earth-500 uppercase block tracking-widest mb-2">备注</label>
+               <p className="text-sm text-earth-900 leading-relaxed">{batch.notes}</p>
+            </div>
+          )}
+
+          {isEditing && (
+            <div className="mt-8 pt-8 border-t border-earth-100 space-y-4 animate-in fade-in slide-in-from-top-4">
               <div className="grid grid-cols-2 gap-4">
                 <div>
-                    <label className="text-[10px] font-black text-earth-400 uppercase tracking-widest block mb-1">Quantity</label>
-                    <p className="text-lg font-black text-earth-900">
-                      {batch.operationType.toLowerCase().includes('harvest') ? `${batch.quantity} g` : `数量: ${batch.quantity}`}
-                    </p>
+                  <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">状态</label>
+                  <select value={outcome} onChange={e => setOutcome(e.target.value)} className="w-full p-3 bg-earth-50 border border-earth-200 rounded-lg text-sm font-bold outline-none">
+                    <option value="">进行中</option>
+                    {userConfigs.statuses.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
+                  </select>
                 </div>
                 <div>
-                    <label className="text-[10px] font-black text-earth-400 uppercase tracking-widest block mb-1">Display ID</label>
-                    <p className="text-xs font-mono font-bold text-earth-600">{batch.displayId}</p>
+                  <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">结束日期</label>
+                  <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-3 bg-earth-50 border border-earth-200 rounded-lg text-sm font-bold outline-none" />
                 </div>
               </div>
-
-              {batch.notes && <div className="bg-earth-50 p-4 rounded-lg text-xs text-earth-700 border border-earth-100 font-medium leading-relaxed italic">"{batch.notes}"</div>}
-              
-              <div className="pt-2 border-t border-earth-50">
-                <button onClick={() => onContinue(batch.id)} className="w-full bg-white text-earth-800 border border-earth-200 p-3.5 rounded-lg font-black uppercase tracking-widest text-[10px] flex justify-center items-center gap-2 hover:bg-earth-50 transition-all active:scale-95"><GitBranch size={16} /> 接续记录</button>
+              <div>
+                <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">备注</label>
+                <textarea 
+                  value={editForm.notes} 
+                  onChange={e => setEditForm({...editForm, notes: e.target.value})}
+                  className="w-full p-4 bg-earth-50 border border-earth-200 rounded-lg text-sm font-medium outline-none min-h-[100px]"
+                />
               </div>
-            </>
+              <div className="flex gap-2">
+                <button 
+                  onClick={handleSave} 
+                  disabled={isSaving}
+                  className="flex-1 bg-earth-800 text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg flex justify-center items-center gap-2 transition-all active:scale-95"
+                >
+                  {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
+                  {isSaving ? '保存中...' : '确认修改'}
+                </button>
+                <button onClick={() => setIsEditing(false)} className="px-6 bg-earth-50 text-earth-500 rounded-xl font-black uppercase tracking-widest text-[10px]">取消</button>
+              </div>
+            </div>
           )}
         </div>
       </div>
-      
-      {batch.imageUrls && batch.imageUrls.length > 0 && (
-          <div className="space-y-3">
-              <h2 className="text-[10px] font-black text-earth-900 flex items-center gap-1.5 px-1 uppercase tracking-widest"><ImageIcon size={14} className="text-earth-400"/> Mycelium Vision</h2>
-              <div className="grid grid-cols-3 gap-2">
-                  {batch.imageUrls.map((url, idx) => (
-                      <div key={idx} className="relative aspect-square rounded-lg overflow-hidden border border-earth-100 shadow-sm group">
-                          <img src={url} alt={`Log ${idx}`} className="w-full h-full object-cover" />
-                          <div className="absolute inset-0 bg-black/0 group-hover:bg-black/40 flex items-center justify-center transition-all">
-                             <div className="flex gap-2 opacity-0 group-hover:opacity-100">
-                                <button onClick={() => setViewImage(url)} className="p-1.5 bg-white rounded text-earth-800 shadow-lg"><Maximize2 size={14} /></button>
-                                <button onClick={(e) => { e.stopPropagation(); handleDeleteImage(url); }} className="p-1.5 bg-red-600 rounded text-white shadow-lg"><Trash2 size={14} /></button>
-                             </div>
-                          </div>
-                      </div>
-                  ))}
-              </div>
-          </div>
-      )}
 
-      {batch.operationType !== 'Harvest' && (
-          <div className="bg-white p-6 rounded-lg border border-earth-200 shadow-sm">
-            <h2 className="text-[10px] font-black text-earth-900 uppercase tracking-widest mb-6 px-1">{t('contamination_title')}</h2>
-            <div className="space-y-6">
-               <div className="grid grid-cols-3 gap-2">
-                 {userConfigs.statuses.map(s => {
-                     const styles = getStylesForColor(s.colorHex);
-                     return <button 
-                                key={s.id} 
-                                onClick={() => setOutcome(prev => prev === s.name ? undefined : s.name)} 
-                                className={`py-3 rounded-lg border text-[10px] font-black uppercase tracking-widest transition-all ${outcome === s.name ? 'border-earth-800 ring-2 ring-earth-800/10' : 'opacity-40 grayscale hover:opacity-100 hover:grayscale-0'}`} 
-                                style={outcome === s.name ? styles.solid : styles.badge}
-                              >
-                                {s.name}
-                              </button>;
-                 })}
-               </div>
-               <button onClick={async () => {
-                   setIsSaving(true);
-                   try {
-                     const updated = { ...batch, outcome, endDate: endDate || undefined };
-                     await updateBatch(updated);
-                     onUpdate(updated);
-                     setShowSuccess(true);
-                     setTimeout(() => setShowSuccess(false), 2000);
-                   } catch (e: any) { alert("更新失败"); } finally { setIsSaving(false); }
-               }} disabled={isSaving} className={`w-full py-4 rounded-lg font-black uppercase tracking-widest text-[10px] transition-all shadow-md flex items-center justify-center gap-2 ${showSuccess ? 'bg-green-600 text-white' : 'bg-earth-800 text-white active:scale-95'}`}>
-                 {isSaving ? <Loader2 size={16} className="animate-spin" /> : showSuccess ? <Check size={16} /> : <Save size={16} />} {isSaving ? 'Updating...' : showSuccess ? 'Success' : 'Update Status'}
-               </button>
+      <div className="bg-white rounded-[32px] border border-earth-200 shadow-sm p-8 mb-6">
+        <div className="flex items-center justify-between mb-6">
+          <div className="flex items-center gap-2 text-earth-900 font-black uppercase tracking-widest text-[10px]">
+             <ImageIcon size={18} /> 图片记录
+          </div>
+          <button 
+            onClick={() => fileInputRef.current?.click()} 
+            disabled={isUploading}
+            className="text-[10px] font-black uppercase tracking-widest text-earth-600 flex items-center gap-1.5 hover:text-earth-900 transition-colors"
+          >
+            {isUploading ? <Loader2 className="animate-spin" size={14}/> : <Camera size={14} />} 添加照片
+          </button>
+          <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
+        </div>
+
+        {uploadError && (
+          <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg text-[10px] text-red-600 font-black uppercase tracking-tighter flex gap-2 items-center">
+            <AlertCircle size={14} /> {uploadError}
+          </div>
+        )}
+
+        <div className="grid grid-cols-3 gap-3">
+          {batch.imageUrls && batch.imageUrls.map((url, i) => (
+            <div key={i} className="aspect-square relative group rounded-2xl overflow-hidden border border-earth-100 bg-earth-50 shadow-inner">
+              <img src={url} className="w-full h-full object-cover cursor-pointer" onClick={() => setViewImage(url)} />
+              <button 
+                onClick={() => handleDeleteImage(url)} 
+                className="absolute top-1.5 right-1.5 p-1.5 bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
+              >
+                <Trash2 size={12} />
+              </button>
             </div>
-          </div>
-      )}
-
-      <div className="pb-10">
-        <h2 className="text-[10px] font-black text-earth-900 uppercase tracking-widest mb-6 px-1">{t('growing_timeline')}</h2>
-        <div className="relative pl-6 space-y-0">
-          <div className="absolute left-[1.45rem] top-4 bottom-4 w-0.5 bg-earth-100 -z-0"></div>
-          {lineage.map((item, index) => {
-             const isCurrent = item.id === batch.id;
-             const itemStatus = item.outcome ? userConfigs.statuses.find(s => s.name === item.outcome) : null;
-             const statusStyle = getStylesForColor(itemStatus?.colorHex);
-             const prevItem = index > 0 ? lineage[index - 1] : null;
-             const daysDiff = prevItem ? Math.ceil(Math.abs(new Date(item.createdDate).getTime() - new Date(prevItem.createdDate).getTime()) / (1000 * 60 * 60 * 24)) : null;
-             const timelineOpConfig = userConfigs.operations.find(op => op.name.toLowerCase() === item.operationType.toLowerCase());
-
-             return (
-               <div key={item.id} className="relative pb-8 last:pb-0 group">
-                 <div className={`absolute left-0 top-1.5 w-6 h-6 rounded-full flex items-center justify-center border-2 z-10 transition-all ${isCurrent ? 'bg-earth-800 border-white text-white scale-110 shadow-lg' : 'bg-white border-earth-100 text-earth-200 group-hover:border-earth-800'}`}>
-                    {isCurrent ? <ArrowDown size={12} /> : <CheckCircle size={12} />}
-                 </div>
-                 <div onClick={() => !isCurrent && onNavigateToBatch?.(item)} className={`ml-10 p-4 rounded-lg border transition-all ${isCurrent ? 'bg-white border-earth-800 shadow-md ring-1 ring-earth-800/10' : 'bg-earth-50 border-earth-100 opacity-60 cursor-pointer hover:opacity-100 hover:bg-white'}`}>
-                    <div className="flex justify-between items-start mb-1">
-                       <div>
-                         <span className="text-[8px] font-black text-earth-300 uppercase block tracking-widest">{item.displayId}</span>
-                         <h4 className="font-black text-earth-900 text-sm tracking-tight">{timelineOpConfig?.name || item.operationType}</h4>
-                       </div>
-                       {itemStatus && <div className="text-[7px] px-1.5 py-0.5 rounded font-black uppercase tracking-widest border" style={statusStyle.badge}>{itemStatus.name}</div>}
-                    </div>
-                    <div className="flex items-center gap-2 text-[9px] font-black">
-                        <span className="text-earth-400">{new Date(item.createdDate).toLocaleDateString()}</span>
-                        {daysDiff !== null && <span className="text-earth-900">+{daysDiff}D</span>}
-                        <span className="text-earth-300 ml-auto">
-                          {item.operationType.toLowerCase().includes('harvest') ? `${item.quantity} g` : `数量: ${item.quantity}`}
-                        </span>
-                    </div>
-                 </div>
-               </div>
-             );
-          })}
+          ))}
+          {(!batch.imageUrls || batch.imageUrls.length === 0) && (
+            <div className="col-span-3 py-10 flex flex-col items-center justify-center text-earth-400 border-2 border-dashed border-earth-100 rounded-2xl">
+               <Clock size={32} className="mb-2 opacity-20" />
+               <p className="text-[10px] font-black uppercase tracking-widest">暂无图片</p>
+            </div>
+          )}
         </div>
       </div>
+
+      {fullLineage.length > 1 && (
+        <div className="bg-white rounded-[32px] border border-earth-200 shadow-sm p-8">
+           <div className="flex items-center gap-2 text-earth-900 font-black uppercase tracking-widest text-[10px] mb-8">
+             <GitBranch size={18} /> 血统追踪
+           </div>
+           <div className="space-y-0">
+              {fullLineage.map((item, i) => {
+                const isCurrent = item.id === batch.id;
+                const nextItem = fullLineage[i + 1];
+                const daysDiff = nextItem ? getDiffDays(item.createdDate, nextItem.createdDate) : 0;
+                
+                return (
+                  <div key={item.id} className="relative">
+                    <div 
+                      onClick={() => !isCurrent && onNavigateToBatch?.(item)} 
+                      className={`flex items-start gap-4 group ${!isCurrent ? 'cursor-pointer' : ''}`}
+                    >
+                      <div className="flex flex-col items-center shrink-0">
+                        <div className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-300 ${isCurrent ? 'bg-earth-800 border-earth-800 ring-4 ring-earth-800/10' : 'border-earth-300 bg-white group-hover:bg-earth-800 group-hover:border-earth-800'}`}></div>
+                        {i < fullLineage.length - 1 && (
+                          <div className="w-0.5 h-24 bg-earth-100 relative">
+                             {daysDiff > 0 && (
+                               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-earth-100 text-earth-700 px-2 py-0.5 rounded-full text-[9px] font-black border border-white whitespace-nowrap z-10">
+                                 +{daysDiff}D
+                               </div>
+                             )}
+                          </div>
+                        )}
+                      </div>
+                      
+                      <div className={`flex-1 p-5 rounded-2xl border transition-all duration-300 shadow-sm ${isCurrent ? 'bg-earth-800 text-white border-earth-800' : 'bg-earth-50 group-hover:bg-earth-100 border-transparent group-hover:border-earth-200'}`}>
+                        <div className={`text-[10px] font-black font-mono mb-1 ${isCurrent ? 'opacity-60' : 'text-earth-600'}`}>
+                          {item.displayId} {isCurrent && '(CURRENT)'}
+                        </div>
+                        <div className="text-sm font-black mb-2">{item.operationType}</div>
+                        <div className="flex justify-between items-center text-[10px] font-bold">
+                           <span className={isCurrent ? 'opacity-80' : 'text-earth-600'}>{item.createdDate}</span>
+                           <span className={isCurrent ? 'opacity-80' : 'text-earth-600'}>数量: {item.quantity} {item.unit}</span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+           </div>
+        </div>
+      )}
+
+      {viewImage && (
+        <div className="fixed inset-0 z-[60] bg-black/95 flex items-center justify-center p-4 backdrop-blur-xl animate-in fade-in duration-300" onClick={() => setViewImage(null)}>
+           <button className="absolute top-6 right-6 text-white/50 hover:text-white transition-colors"><X size={32}/></button>
+           <img src={viewImage} className="max-w-full max-h-[90vh] object-contain rounded-lg shadow-2xl" />
+        </div>
+      )}
+
+      {showSuccess && (
+        <div className="fixed bottom-32 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4">
+           <div className="bg-green-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 font-black uppercase tracking-widest text-[10px]">
+             <CheckCircle size={16} /> 保存成功
+           </div>
+        </div>
+      )}
     </div>
   );
 };
