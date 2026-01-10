@@ -2,7 +2,7 @@
 import React, { useState } from 'react';
 import { Batch, UserConfigs } from '../types';
 import { getIconForOp, getStylesForColor, useTranslation } from '../constants';
-import { Plus, Layers, Trash2, X, Check, Image as ImageIcon, Pencil, Save, Loader2, Sprout, ChevronRight, Calendar, ArrowRight } from 'lucide-react';
+import { Plus, Layers, Trash2, X, Check, Image as ImageIcon, Pencil, Save, Loader2, Sprout, ChevronRight, Calendar, ArrowRight, AlertTriangle } from 'lucide-react';
 
 interface DashboardProps {
   batches: Batch[];
@@ -202,8 +202,14 @@ const Dashboard: React.FC<DashboardProps> = ({ batches, userConfigs, onSelectBat
                     const totalQty = groupBatches.reduce((sum, b) => sum + b.quantity, 0);
                     const isHarvestGroup = firstBatch.operationType.toLowerCase().includes('harvest');
 
+                    // 获取组状态（只要有一个批次标记了，就显示该状态）
+                    const groupOutcome = groupBatches.find(b => b.outcome)?.outcome;
+                    const groupStatusConfig = userConfigs.statuses.find(s => s.name === groupOutcome);
+                    const groupStatusStyles = getStylesForColor(groupStatusConfig?.colorHex);
+                    const isContam = groupOutcome?.includes('污染') || groupOutcome?.includes('感染');
+
                     return (
-                        <div key={uniqueId} className="bg-white rounded-lg border border-earth-200 shadow-sm hover:shadow-md transition-all duration-300 group overflow-hidden">
+                        <div key={uniqueId} className={`bg-white rounded-lg border shadow-sm hover:shadow-md transition-all duration-300 group overflow-hidden ${isContam ? 'border-red-200 bg-red-50/10' : 'border-earth-200'}`}>
                             <div className="p-6">
                                 <div className="flex gap-4 mb-6 items-center">
                                     <div style={opStyles.bg} className="p-3.5 rounded-lg shrink-0 flex items-center justify-center border border-earth-100/50 w-14 h-14">
@@ -227,6 +233,11 @@ const Dashboard: React.FC<DashboardProps> = ({ batches, userConfigs, onSelectBat
                                                 <span className="px-2 py-0.5 rounded border text-[10px] font-black transition-colors" style={opStyles.badge}>
                                                     {opConfig?.name || firstBatch.operationType}
                                                 </span>
+                                                {groupOutcome && (
+                                                    <span className="px-2 py-0.5 rounded border text-[8px] font-black uppercase tracking-tighter" style={groupStatusStyles.badge}>
+                                                        {groupOutcome}
+                                                    </span>
+                                                )}
                                             </div>
                                             {firstBatch.notes && (
                                               <p className="text-[10px] font-normal text-earth-900 line-clamp-1">
@@ -256,16 +267,22 @@ const Dashboard: React.FC<DashboardProps> = ({ batches, userConfigs, onSelectBat
                                 {!isEditing && (
                                     <>
                                         <div className="flex flex-wrap gap-2 mb-6">
-                                            {groupBatches.map(batch => (
-                                                <button
-                                                    key={batch.id}
-                                                    onClick={() => onSelectBatch(batch)}
-                                                    className="flex items-center gap-2 rounded-lg border border-earth-100 bg-earth-50/30 px-3 py-2 text-[10px] font-black text-earth-700 hover:bg-white hover:border-earth-800 transition-all active:scale-95"
-                                                >
-                                                    <span className="opacity-70 font-mono">{batch.displayId}</span>
-                                                    {batch.imageUrls && batch.imageUrls.length > 0 && <ImageIcon size={12} className="text-earth-400" />}
-                                                </button>
-                                            ))}
+                                            {groupBatches.map(batch => {
+                                                const bStatusConfig = userConfigs.statuses.find(s => s.name === batch.outcome);
+                                                const bStatusStyles = getStylesForColor(bStatusConfig?.colorHex);
+                                                return (
+                                                    <button
+                                                        key={batch.id}
+                                                        onClick={() => onSelectBatch(batch)}
+                                                        className={`flex items-center gap-2 rounded-lg border px-3 py-2 text-[10px] font-black transition-all active:scale-95 ${batch.outcome ? 'bg-white' : 'bg-earth-50/30 border-earth-100 text-earth-700 hover:border-earth-800'}`}
+                                                        style={batch.outcome ? { borderColor: bStatusConfig?.colorHex || '#eee', color: bStatusConfig?.colorHex || '#777' } : {}}
+                                                    >
+                                                        <span className="opacity-70 font-mono">{batch.displayId}</span>
+                                                        {batch.outcome && (batch.outcome.includes('污染') || batch.outcome.includes('感染')) && <AlertTriangle size={10} />}
+                                                        {batch.imageUrls && batch.imageUrls.length > 0 && <ImageIcon size={12} className="text-earth-400" />}
+                                                    </button>
+                                                );
+                                            })}
                                         </div>
 
                                         <div className="flex items-center justify-between text-[10px] font-black border-t border-earth-50 pt-4">

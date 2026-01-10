@@ -3,7 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Batch, UserConfigs, Unit } from '../types';
 import { updateBatch, uploadBatchImage, deleteBatchImage } from '../services/storageService';
 import { getIconForOp, getStylesForColor, useTranslation } from '../constants';
-import { ArrowLeft, CheckCircle, Loader2, Check, GitBranch, Pencil, Trash2, X, Camera, Image as ImageIcon, AlertCircle, Clock, Save, Scale } from 'lucide-react';
+// Added Activity icon to imports
+import { ArrowLeft, CheckCircle, Loader2, Check, GitBranch, Pencil, Trash2, X, Camera, Image as ImageIcon, AlertCircle, Clock, Save, Scale, AlertTriangle, ShieldCheck, Activity } from 'lucide-react';
 
 interface GrowDetailProps {
   userId: string;
@@ -29,13 +30,13 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
   const fileInputRef = useRef<HTMLInputElement>(null);
 
   const [outcome, setOutcome] = useState<string | undefined>(batch.outcome);
-  const [endDate, setEndDate] = useState<string>(batch.endDate || '');
+  const [endDate, setEndDate] = useState<string>(batch.endDate || new Date().toISOString().split('T')[0]);
   const [editForm, setEditForm] = useState<Partial<Batch>>({});
   const [lineage, setLineage] = useState<Batch[]>([]);
 
   useEffect(() => {
     setOutcome(batch.outcome);
-    setEndDate(batch.endDate || '');
+    setEndDate(batch.endDate || new Date().toISOString().split('T')[0]);
     setEditForm({ 
         createdDate: batch.createdDate, 
         operationType: batch.operationType, 
@@ -44,7 +45,6 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
         unit: batch.unit || Unit.BAG,
         notes: batch.notes || '' 
     });
-    setIsEditing(false); 
   }, [batch]);
 
   useEffect(() => {
@@ -58,6 +58,25 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
     }
     setLineage(ancestors);
   }, [batch, allBatches]);
+
+  const handleQuickStatusSave = async (selectedOutcome: string) => {
+    setIsSaving(true);
+    try {
+      const updated = {
+        ...batch,
+        outcome: selectedOutcome,
+        endDate: endDate
+      } as Batch;
+      await updateBatch(updated);
+      onUpdate(updated);
+      setShowSuccess(true);
+      setTimeout(() => setShowSuccess(false), 2000);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setIsSaving(false);
+    }
+  };
 
   const handleSave = async () => {
     setIsSaving(true);
@@ -121,14 +140,11 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
   const opStyles = getStylesForColor(opConfig?.colorHex);
   const Icon = getIconForOp(opConfig?.name || batch.operationType);
 
-  const fullLineage = [...lineage, batch];
+  const statusConfig = userConfigs.statuses.find(s => s.name === batch.outcome);
+  const statusStyles = getStylesForColor(statusConfig?.colorHex);
 
-  const totalHarvestWeight = fullLineage.reduce((sum, item) => {
-    if (item.operationType.toLowerCase().includes('harvest')) {
-      return sum + item.quantity;
-    }
-    return sum;
-  }, 0);
+  const fullLineage = [...lineage, batch];
+  const totalHarvestWeight = fullLineage.reduce((sum, item) => item.operationType.toLowerCase().includes('harvest') ? sum + item.quantity : sum, 0);
 
   return (
     <div className="pb-24">
@@ -150,14 +166,26 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
 
       <div className="bg-white rounded-[32px] border border-earth-200 shadow-sm overflow-hidden mb-6">
         <div className="p-8">
-          <div className="flex items-center gap-6 mb-8">
-            <div style={opStyles.bg} className="p-5 rounded-3xl border border-earth-100/50">
-              <Icon size={32} />
+          <div className="flex items-center justify-between mb-8">
+            <div className="flex items-center gap-6">
+                <div style={opStyles.bg} className="p-5 rounded-3xl border border-earth-100/50">
+                    <Icon size={32} />
+                </div>
+                <div>
+                    <div className="text-[10px] font-black text-earth-600 uppercase tracking-widest mb-1">Batch ID</div>
+                    <h2 className="text-2xl font-black text-earth-900 font-mono tracking-tight">{batch.displayId}</h2>
+                </div>
             </div>
-            <div>
-              <div className="text-[10px] font-black text-earth-600 uppercase tracking-widest mb-1">Batch ID</div>
-              <h2 className="text-2xl font-black text-earth-900 font-mono tracking-tight">{batch.displayId}</h2>
-            </div>
+            {batch.outcome ? (
+                <div style={statusStyles.badge} className="px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border flex items-center gap-2">
+                    {batch.outcome.includes('污染') || batch.outcome.includes('感染') ? <AlertTriangle size={14}/> : <ShieldCheck size={14}/>}
+                    {batch.outcome}
+                </div>
+            ) : (
+                <div className="px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-earth-100 bg-earth-50 text-earth-400">
+                    进行中
+                </div>
+            )}
           </div>
 
           <div className="grid grid-cols-2 gap-6">
@@ -185,83 +213,89 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
             </div>
           </div>
 
-          {batch.notes && !isEditing && (
-            <div className="mt-8 pt-8 border-t border-earth-50">
-               <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-2">备注</label>
-               <p className="text-sm text-earth-900 leading-relaxed">{batch.notes}</p>
-            </div>
-          )}
-
           {isEditing && (
-            <div className="mt-8 pt-8 border-t border-earth-100 space-y-4 animate-in fade-in slide-in-from-top-4">
-              <div className="grid grid-cols-2 gap-4">
-                <div>
-                  <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">状态</label>
-                  <select value={outcome} onChange={e => setOutcome(e.target.value)} className="w-full p-3 bg-earth-50 border border-earth-200 rounded-lg text-sm font-bold outline-none">
-                    <option value="">进行中</option>
-                    {userConfigs.statuses.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}
-                  </select>
+             <div className="mt-8 pt-8 border-t border-earth-100 space-y-4">
+               <div>
+                  <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">备注</label>
+                  <textarea 
+                    value={editForm.notes} 
+                    onChange={e => setEditForm({...editForm, notes: e.target.value})}
+                    className="w-full p-4 bg-earth-50 border border-earth-200 rounded-lg text-sm font-medium outline-none min-h-[100px]"
+                  />
                 </div>
-                <div>
-                  <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">结束日期</label>
-                  <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-3 bg-earth-50 border border-earth-200 rounded-lg text-sm font-bold outline-none" />
+                <div className="flex gap-2">
+                  <button onClick={handleSave} disabled={isSaving} className="flex-1 bg-earth-800 text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg flex justify-center items-center gap-2 transition-all active:scale-95">
+                    {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />} 确认修改
+                  </button>
+                  <button onClick={() => setIsEditing(false)} className="px-6 bg-earth-50 text-earth-600 rounded-xl font-black uppercase tracking-widest text-[10px]">取消</button>
                 </div>
-              </div>
-              <div>
-                <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">备注</label>
-                <textarea 
-                  value={editForm.notes} 
-                  onChange={e => setEditForm({...editForm, notes: e.target.value})}
-                  className="w-full p-4 bg-earth-50 border border-earth-200 rounded-lg text-sm font-medium outline-none min-h-[100px]"
-                />
-              </div>
-              <div className="flex gap-2">
-                <button 
-                  onClick={handleSave} 
-                  disabled={isSaving}
-                  className="flex-1 bg-earth-800 text-white py-4 rounded-xl font-black uppercase tracking-widest text-[10px] shadow-lg flex justify-center items-center gap-2 transition-all active:scale-95"
-                >
-                  {isSaving ? <Loader2 className="animate-spin" size={16} /> : <Save size={16} />}
-                  {isSaving ? '保存中...' : '确认修改'}
-                </button>
-                <button onClick={() => setIsEditing(false)} className="px-6 bg-earth-50 text-earth-600 rounded-xl font-black uppercase tracking-widest text-[10px]">取消</button>
-              </div>
-            </div>
+             </div>
           )}
         </div>
       </div>
+
+      {/* 状态更新区块 - Fixed Activity icon missing error */}
+      {!isEditing && (
+        <div className="bg-white rounded-[32px] border border-earth-200 shadow-sm p-8 mb-6">
+            <div className="flex items-center gap-2 text-earth-900 font-black uppercase tracking-widest text-[10px] mb-6">
+                <Activity size={18} /> 状态记录
+            </div>
+            <div className="space-y-6">
+                <div className="grid grid-cols-2 gap-4">
+                    <div>
+                        <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">记录日期</label>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-3 bg-earth-50 border border-earth-200 rounded-lg text-sm font-bold outline-none" />
+                    </div>
+                    <div>
+                        <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">选择当前状态</label>
+                        <div className="flex flex-wrap gap-2">
+                            {userConfigs.statuses.map(s => {
+                                const sStyle = getStylesForColor(s.colorHex);
+                                const isSelected = outcome === s.name;
+                                return (
+                                    <button 
+                                        key={s.id} 
+                                        onClick={() => handleQuickStatusSave(s.name)}
+                                        disabled={isSaving}
+                                        style={isSelected ? sStyle.solid : sStyle.badge}
+                                        className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-tighter border transition-all active:scale-95 flex items-center gap-1.5 ${isSaving ? 'opacity-50' : ''}`}
+                                    >
+                                        {isSelected && <Check size={12}/>}
+                                        {s.name}
+                                    </button>
+                                );
+                            })}
+                            {outcome && (
+                                <button 
+                                    onClick={() => handleQuickStatusSave('')}
+                                    className="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-tighter border border-earth-100 bg-earth-50 text-earth-400 hover:text-earth-900"
+                                >
+                                    恢复进行中
+                                </button>
+                            )}
+                        </div>
+                    </div>
+                </div>
+                <p className="text-[9px] text-earth-400 font-medium italic">* 选择状态将自动保存并更新该批次。污染记录对生长统计至关重要。</p>
+            </div>
+        </div>
+      )}
 
       <div className="bg-white rounded-[32px] border border-earth-200 shadow-sm p-8 mb-6">
         <div className="flex items-center justify-between mb-6">
           <div className="flex items-center gap-2 text-earth-900 font-black uppercase tracking-widest text-[10px]">
              <ImageIcon size={18} /> 图片记录
           </div>
-          <button 
-            onClick={() => fileInputRef.current?.click()} 
-            disabled={isUploading}
-            className="text-[10px] font-black uppercase tracking-widest text-earth-600 flex items-center gap-1.5 hover:text-earth-900 transition-colors"
-          >
+          <button onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="text-[10px] font-black uppercase tracking-widest text-earth-600 flex items-center gap-1.5 hover:text-earth-900 transition-colors">
             {isUploading ? <Loader2 className="animate-spin" size={14}/> : <Camera size={14} />} 添加照片
           </button>
           <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
         </div>
-
-        {uploadError && (
-          <div className="mb-4 p-3 bg-red-50 border border-red-100 rounded-lg text-[10px] text-red-600 font-black uppercase tracking-tighter flex gap-2 items-center">
-            <AlertCircle size={14} /> {uploadError}
-          </div>
-        )}
-
         <div className="grid grid-cols-3 gap-3">
           {batch.imageUrls && batch.imageUrls.map((url, i) => (
             <div key={i} className="aspect-square relative group rounded-2xl overflow-hidden border border-earth-100 bg-earth-50 shadow-inner">
               <img src={url} className="w-full h-full object-cover cursor-pointer" onClick={() => setViewImage(url)} />
-              <button 
-                onClick={() => handleDeleteImage(url)} 
-                className="absolute top-1.5 right-1.5 p-1.5 bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"
-              >
-                <Trash2 size={12} />
-              </button>
+              <button onClick={() => handleDeleteImage(url)} className="absolute top-1.5 right-1.5 p-1.5 bg-black/40 text-white rounded-full opacity-0 group-hover:opacity-100 transition-opacity backdrop-blur-sm"><Trash2 size={12} /></button>
             </div>
           ))}
           {(!batch.imageUrls || batch.imageUrls.length === 0) && (
@@ -285,35 +319,33 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
                 const daysDiff = nextItem ? getDiffDays(item.createdDate, nextItem.createdDate) : 0;
                 const isHarvest = item.operationType.toLowerCase().includes('harvest');
                 
+                const itemStatusConfig = userConfigs.statuses.find(s => s.name === item.outcome);
+                const itemStatusStyles = getStylesForColor(itemStatusConfig?.colorHex);
+
                 return (
                   <div key={item.id} className="relative">
-                    <div 
-                      onClick={() => !isCurrent && onNavigateToBatch?.(item)} 
-                      className={`flex items-start gap-4 group ${!isCurrent ? 'cursor-pointer' : ''}`}
-                    >
+                    <div onClick={() => !isCurrent && onNavigateToBatch?.(item)} className={`flex items-start gap-4 group ${!isCurrent ? 'cursor-pointer' : ''}`}>
                       <div className="flex flex-col items-center shrink-0">
                         <div className={`w-3.5 h-3.5 rounded-full border-2 transition-all duration-300 ${isCurrent ? 'bg-earth-800 border-earth-800 ring-4 ring-earth-800/10' : 'border-earth-300 bg-white group-hover:bg-earth-800 group-hover:border-earth-800'}`}></div>
                         {i < fullLineage.length - 1 && (
                           <div className="w-0.5 h-24 bg-earth-100 relative">
-                             {daysDiff > 0 && (
-                               <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-earth-100 text-earth-800 px-2 py-0.5 rounded-full text-[9px] font-black border border-white whitespace-nowrap z-10 shadow-sm">
-                                 +{daysDiff}D
-                               </div>
-                             )}
+                             {daysDiff > 0 && <div className="absolute top-1/2 left-1/2 -translate-x-1/2 -translate-y-1/2 bg-earth-100 text-earth-800 px-2 py-0.5 rounded-full text-[9px] font-black border border-white whitespace-nowrap z-10 shadow-sm">+{daysDiff}D</div>}
                           </div>
                         )}
                       </div>
-                      
                       <div className={`flex-1 p-5 rounded-2xl border transition-all duration-300 shadow-sm ${isCurrent ? 'bg-earth-800 text-white border-earth-800' : 'bg-earth-50 group-hover:bg-earth-100 border-transparent group-hover:border-earth-200'}`}>
-                        <div className={`text-[10px] font-black font-mono mb-1 ${isCurrent ? 'opacity-60' : 'text-earth-700'}`}>
-                          {item.displayId} {isCurrent && '(CURRENT)'}
+                        <div className="flex justify-between items-start mb-2">
+                            <div className={`text-[10px] font-black font-mono ${isCurrent ? 'opacity-60' : 'text-earth-700'}`}>{item.displayId} {isCurrent && '(CURRENT)'}</div>
+                            {item.outcome && (
+                                <div style={itemStatusStyles.badge} className="px-1.5 py-0.5 rounded text-[8px] font-black uppercase tracking-tighter border">
+                                    {item.outcome}
+                                </div>
+                            )}
                         </div>
                         <div className={`text-sm font-black mb-2 ${isCurrent ? 'text-white' : 'text-earth-900'}`}>{item.operationType}</div>
                         <div className="flex justify-between items-center text-[10px] font-bold">
                            <span className={isCurrent ? 'opacity-80' : 'text-earth-700'}>{item.createdDate}</span>
-                           <span className={isCurrent ? 'opacity-80' : 'text-earth-700'}>
-                             {isHarvest ? `${item.quantity} g` : `数量: ${item.quantity}`}
-                           </span>
+                           <span className={isCurrent ? 'opacity-80' : 'text-earth-700'}>{isHarvest ? `${item.quantity} g` : `数量: ${item.quantity}`}</span>
                         </div>
                       </div>
                     </div>
@@ -321,15 +353,10 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
                 );
               })}
            </div>
-
            {totalHarvestWeight > 0 && (
              <div className="mt-10 pt-6 border-t border-earth-100 flex justify-between items-center animate-in fade-in slide-in-from-bottom-2 duration-500">
-                <div className="flex items-center gap-2 text-earth-600 font-black uppercase tracking-[0.1em] text-[10px]">
-                   <Scale size={16} className="text-earth-400" /> 总收获量
-                </div>
-                <div className="text-2xl font-black text-earth-900 tracking-tight">
-                  {totalHarvestWeight.toFixed(1)} <span className="text-xs font-bold text-earth-500 ml-0.5">g</span>
-                </div>
+                <div className="flex items-center gap-2 text-earth-600 font-black uppercase tracking-[0.1em] text-[10px]"><Scale size={16} className="text-earth-400" /> 总收获量</div>
+                <div className="text-2xl font-black text-earth-900 tracking-tight">{totalHarvestWeight.toFixed(1)} <span className="text-xs font-bold text-earth-500 ml-0.5">g</span></div>
              </div>
            )}
         </div>
@@ -345,7 +372,7 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
       {showSuccess && (
         <div className="fixed bottom-32 left-1/2 -translate-x-1/2 z-50 animate-in fade-in slide-in-from-bottom-4">
            <div className="bg-green-600 text-white px-6 py-3 rounded-full shadow-2xl flex items-center gap-2 font-black uppercase tracking-widest text-[10px]">
-             <CheckCircle size={16} /> 保存成功
+             <CheckCircle size={16} /> 更新成功
            </div>
         </div>
       )}
