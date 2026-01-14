@@ -3,8 +3,8 @@ import React, { useState, useEffect, useRef } from 'react';
 import { Batch, UserConfigs, Unit } from '../types';
 import { updateBatch, uploadBatchImage, deleteBatchImage } from '../services/storageService';
 import { getIconForOp, getStylesForColor, useTranslation } from '../constants';
-// Added Activity icon to imports
-import { ArrowLeft, CheckCircle, Loader2, Check, GitBranch, Pencil, Trash2, X, Camera, Image as ImageIcon, AlertCircle, Clock, Save, Scale, AlertTriangle, ShieldCheck, Activity } from 'lucide-react';
+// Added 'Info' to the imports to fix "Cannot find name 'Info'" error.
+import { ArrowLeft, CheckCircle, Loader2, Check, GitBranch, Pencil, Trash2, X, Camera, Image as ImageIcon, AlertCircle, Clock, Save, Scale, AlertTriangle, ShieldCheck, Activity, Info } from 'lucide-react';
 
 interface GrowDetailProps {
   userId: string;
@@ -166,23 +166,24 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
 
       <div className="bg-white rounded-[32px] border border-earth-200 shadow-sm overflow-hidden mb-6">
         <div className="p-8">
-          <div className="flex items-center justify-between mb-8">
-            <div className="flex items-center gap-6">
-                <div style={opStyles.bg} className="p-5 rounded-3xl border border-earth-100/50">
-                    <Icon size={32} />
+          <div className="flex items-start justify-between mb-8 gap-4">
+            <div className="flex items-center gap-4 min-w-0">
+                <div style={opStyles.bg} className="p-4 rounded-2xl border border-earth-100/50 shrink-0">
+                    <Icon size={28} />
                 </div>
-                <div>
-                    <div className="text-[10px] font-black text-earth-600 uppercase tracking-widest mb-1">Batch ID</div>
-                    <h2 className="text-2xl font-black text-earth-900 font-mono tracking-tight">{batch.displayId}</h2>
+                <div className="min-w-0">
+                    <div className="text-[10px] font-black text-earth-600 uppercase tracking-widest mb-0.5">Batch ID</div>
+                    <h2 className="text-xl font-black text-earth-900 font-mono tracking-tighter truncate">{batch.displayId}</h2>
                 </div>
             </div>
+            {/* 修复：添加 whitespace-nowrap 和 shrink-0 防止勋章变成椭圆 */}
             {batch.outcome ? (
-                <div style={statusStyles.badge} className="px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border flex items-center gap-2">
+                <div style={statusStyles.badge} className="px-3 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border flex items-center gap-1.5 whitespace-nowrap shrink-0 mt-1 shadow-sm">
                     {batch.outcome.includes('污染') || batch.outcome.includes('感染') ? <AlertTriangle size={14}/> : <ShieldCheck size={14}/>}
                     {batch.outcome}
                 </div>
             ) : (
-                <div className="px-4 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-earth-100 bg-earth-50 text-earth-400">
+                <div className="px-3 py-2 rounded-full text-[10px] font-black uppercase tracking-widest border border-earth-100 bg-earth-50 text-earth-400 whitespace-nowrap shrink-0 mt-1">
                     进行中
                 </div>
             )}
@@ -234,21 +235,22 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
         </div>
       </div>
 
-      {/* 状态更新区块 - Fixed Activity icon missing error */}
+      {/* 状态更新区块 - 优化移动端布局 */}
       {!isEditing && (
         <div className="bg-white rounded-[32px] border border-earth-200 shadow-sm p-8 mb-6">
             <div className="flex items-center gap-2 text-earth-900 font-black uppercase tracking-widest text-[10px] mb-6">
                 <Activity size={18} /> 状态记录
             </div>
-            <div className="space-y-6">
-                <div className="grid grid-cols-2 gap-4">
+            <div className="space-y-8">
+                <div className="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    {/* 优化日期输入框宽度 */}
                     <div>
-                        <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">记录日期</label>
-                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-3 bg-earth-50 border border-earth-200 rounded-lg text-sm font-bold outline-none" />
+                        <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-2 ml-1">记录日期</label>
+                        <input type="date" value={endDate} onChange={e => setEndDate(e.target.value)} className="w-full p-4 bg-earth-50 border border-earth-200 rounded-xl text-sm font-black outline-none focus:ring-2 focus:ring-earth-800/10 transition-all" />
                     </div>
                     <div>
-                        <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-1">选择当前状态</label>
-                        <div className="flex flex-wrap gap-2">
+                        <label className="text-[10px] font-black text-earth-600 uppercase block tracking-widest mb-2 ml-1">更改当前状态</label>
+                        <div className="flex flex-wrap gap-2.5">
                             {userConfigs.statuses.map(s => {
                                 const sStyle = getStylesForColor(s.colorHex);
                                 const isSelected = outcome === s.name;
@@ -258,9 +260,9 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
                                         onClick={() => handleQuickStatusSave(s.name)}
                                         disabled={isSaving}
                                         style={isSelected ? sStyle.solid : sStyle.badge}
-                                        className={`px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-tighter border transition-all active:scale-95 flex items-center gap-1.5 ${isSaving ? 'opacity-50' : ''}`}
+                                        className={`px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-tighter border transition-all active:scale-95 flex items-center gap-2 shadow-sm ${isSaving ? 'opacity-50' : ''}`}
                                     >
-                                        {isSelected && <Check size={12}/>}
+                                        {isSelected && <Check size={14} className="stroke-[3]"/>}
                                         {s.name}
                                     </button>
                                 );
@@ -268,7 +270,7 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
                             {outcome && (
                                 <button 
                                     onClick={() => handleQuickStatusSave('')}
-                                    className="px-3 py-2 rounded-lg text-[10px] font-black uppercase tracking-tighter border border-earth-100 bg-earth-50 text-earth-400 hover:text-earth-900"
+                                    className="px-4 py-2.5 rounded-xl text-[10px] font-black uppercase tracking-tighter border border-earth-100 bg-earth-50 text-earth-400 hover:text-earth-900 transition-all"
                                 >
                                     恢复进行中
                                 </button>
@@ -276,7 +278,12 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
                         </div>
                     </div>
                 </div>
-                <p className="text-[9px] text-earth-400 font-medium italic">* 选择状态将自动保存并更新该批次。污染记录对生长统计至关重要。</p>
+                <div className="flex items-start gap-2 p-4 bg-earth-50/50 rounded-2xl border border-earth-100/50">
+                    <Info size={14} className="text-earth-400 shrink-0 mt-0.5" />
+                    <p className="text-[10px] text-earth-400 font-bold leading-relaxed italic uppercase tracking-tighter">
+                      选择状态后将即时更新批次信息。及时的污染记录有助于统计该菌种的抗性数据。
+                    </p>
+                </div>
             </div>
         </div>
       )}
@@ -286,7 +293,7 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
           <div className="flex items-center gap-2 text-earth-900 font-black uppercase tracking-widest text-[10px]">
              <ImageIcon size={18} /> 图片记录
           </div>
-          <button onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="text-[10px] font-black uppercase tracking-widest text-earth-600 flex items-center gap-1.5 hover:text-earth-900 transition-colors">
+          <button onClick={() => fileInputRef.current?.click()} disabled={isUploading} className="text-[10px] font-black uppercase tracking-widest text-earth-600 flex items-center gap-1.5 hover:text-earth-900 transition-colors bg-earth-50 px-3 py-2 rounded-lg border border-earth-100 shadow-sm">
             {isUploading ? <Loader2 className="animate-spin" size={14}/> : <Camera size={14} />} 添加照片
           </button>
           <input type="file" ref={fileInputRef} className="hidden" accept="image/*" onChange={handleImageUpload} />
@@ -299,7 +306,7 @@ const GrowDetail: React.FC<GrowDetailProps> = ({ userId, grow: batch, allBatches
             </div>
           ))}
           {(!batch.imageUrls || batch.imageUrls.length === 0) && (
-            <div className="col-span-3 py-10 flex flex-col items-center justify-center text-earth-400 border-2 border-dashed border-earth-100 rounded-2xl">
+            <div className="col-span-3 py-10 flex flex-col items-center justify-center text-earth-400 border-2 border-dashed border-earth-200 shadow-inner">
                <Clock size={32} className="mb-2 opacity-20" />
                <p className="text-[10px] font-black uppercase tracking-widest">暂无图片</p>
             </div>

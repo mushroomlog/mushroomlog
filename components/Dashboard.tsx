@@ -11,7 +11,7 @@ interface DashboardProps {
   onNewOperation: () => void;
   onContinue: (batchId: string) => void;
   onDeleteBatchGroup: (batchIds: string[]) => void;
-  onUpdateBatchGroup?: (batches: Batch[], newSpecies: string, newDate: string, newQty: number) => Promise<void>;
+  onUpdateBatchGroup?: (batches: Batch[], newSpecies: string, newDate: string, newQty: number, newOpType: string) => Promise<void>;
 }
 
 const Dashboard: React.FC<DashboardProps> = ({ batches, userConfigs, onSelectBatch, onNewOperation, onContinue, onDeleteBatchGroup, onUpdateBatchGroup }) => {
@@ -26,14 +26,16 @@ const Dashboard: React.FC<DashboardProps> = ({ batches, userConfigs, onSelectBat
   const [editingGroupKey, setEditingGroupKey] = useState<string | null>(null);
   const [editSpecies, setEditSpecies] = useState('');
   const [editDate, setEditDate] = useState('');
+  const [editOperationType, setEditOperationType] = useState('');
   const [editQuantity, setEditQuantity] = useState(1);
   const [isSavingGroup, setIsSavingGroup] = useState(false);
 
-  const handleEditGroupClick = (e: React.MouseEvent, key: string, species: string, date: string, qty: number) => {
+  const handleEditGroupClick = (e: React.MouseEvent, key: string, species: string, date: string, qty: number, opType: string) => {
     e.stopPropagation();
     setEditingGroupKey(key);
     setEditSpecies(species);
     setEditDate(date);
+    setEditOperationType(opType);
     setEditQuantity(qty);
   };
 
@@ -52,7 +54,7 @@ const Dashboard: React.FC<DashboardProps> = ({ batches, userConfigs, onSelectBat
     if (!onUpdateBatchGroup) return;
     setIsSavingGroup(true);
     try {
-      await onUpdateBatchGroup(group, editSpecies, editDate, editQuantity);
+      await onUpdateBatchGroup(group, editSpecies, editDate, editQuantity, editOperationType);
       setEditingGroupKey(null);
     } catch (e) {
       console.error("Failed to update group", e);
@@ -218,8 +220,13 @@ const Dashboard: React.FC<DashboardProps> = ({ batches, userConfigs, onSelectBat
                                     
                                     {isEditing ? (
                                         <div className="flex-1 space-y-2">
-                                            <select value={editSpecies} onChange={(e) => setEditSpecies(e.target.value)} className="w-full p-2 border border-earth-200 rounded-lg text-xs bg-earth-50 font-bold outline-none">{userConfigs.species.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select>
-                                            <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="w-full p-2 border border-earth-200 rounded-lg text-xs bg-earth-50 font-bold outline-none"/>
+                                            <div className="grid grid-cols-2 gap-2">
+                                                <select value={editSpecies} onChange={(e) => setEditSpecies(e.target.value)} className="w-full p-2 border border-earth-200 rounded-lg text-xs bg-earth-50 font-bold outline-none">{userConfigs.species.map(s => <option key={s.id} value={s.name}>{s.name}</option>)}</select>
+                                                <input type="date" value={editDate} onChange={(e) => setEditDate(e.target.value)} className="w-full p-2 border border-earth-200 rounded-lg text-xs bg-earth-50 font-bold outline-none"/>
+                                            </div>
+                                            <select value={editOperationType} onChange={(e) => setEditOperationType(e.target.value)} className="w-full p-2 border border-earth-200 rounded-lg text-xs bg-earth-50 font-bold outline-none">
+                                                {userConfigs.operations.map(op => <option key={op.id} value={op.name}>{op.name}</option>)}
+                                            </select>
                                         </div>
                                     ) : (
                                         <div className="min-w-0 flex-1">
@@ -257,7 +264,7 @@ const Dashboard: React.FC<DashboardProps> = ({ batches, userConfigs, onSelectBat
                                             </div>
                                         ) : (
                                             <div className="flex gap-0.5 opacity-0 group-hover:opacity-100 transition-all">
-                                                <button onClick={(e) => handleEditGroupClick(e, uniqueId, firstBatch.species, firstBatch.createdDate, totalQty)} className="p-2 text-earth-300 hover:text-earth-900 transition-colors"><Pencil size={16} /></button>
+                                                <button onClick={(e) => handleEditGroupClick(e, uniqueId, firstBatch.species, firstBatch.createdDate, totalQty, firstBatch.operationType)} className="p-2 text-earth-300 hover:text-earth-900 transition-colors"><Pencil size={16} /></button>
                                                 <button onClick={(e) => handleDeleteGroupClick(e, uniqueId, batchIds)} className={`p-2 transition-all ${deleteGroupConfirmKey === uniqueId ? 'text-red-600' : 'text-earth-200 hover:text-red-500'}`}><Trash2 size={16} /></button>
                                             </div>
                                         )}

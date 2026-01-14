@@ -210,12 +210,12 @@ export const expandBatch = async (batch: Batch, count: number, userId: string): 
     await deleteBatch(batch.id);
 };
 
-export const updateBatchGroup = async (group: Batch[], newSpecies: string, newDate: string, newQty: number, userId: string, userConfigs: UserConfigs): Promise<void> => {
+export const updateBatchGroup = async (group: Batch[], newSpecies: string, newDate: string, newQty: number, newOpType: string, userId: string, userConfigs: UserConfigs): Promise<void> => {
     let displayIds: string[] = group.map(b => b.displayId);
     if (group.some(b => b.species !== newSpecies || b.createdDate !== newDate)) {
         displayIds = await generateNextBatchIds(newSpecies, newDate, userConfigs.species, group.length);
     }
-    const updates = group.map((batch, index) => mapBatchToDB({ ...batch, species: newSpecies, createdDate: newDate, quantity: newQty / group.length, displayId: displayIds[index] }, userId));
+    const updates = group.map((batch, index) => mapBatchToDB({ ...batch, species: newSpecies, createdDate: newDate, operationType: newOpType, quantity: newQty / group.length, displayId: displayIds[index] }, userId));
     const { error } = await getSupabase().from('batches').upsert(updates);
     if (error) handleSupabaseError(error, "updateBatchGroup");
 };

@@ -151,7 +151,7 @@ const App: React.FC = () => {
             onNewOperation={() => { setPreselectedParentId(undefined); setCurrentView(TabView.NEW_OPERATION); }} 
             onContinue={(id) => { setPreselectedParentId(id); setCurrentView(TabView.NEW_OPERATION); }}
             onDeleteBatchGroup={async (ids) => { setLoadingData(true); await deleteBatchGroup(ids); fetchData(); }}
-            onUpdateBatchGroup={async (g, s, d, q) => { if(!session?.user?.id) return; setLoadingData(true); await updateBatchGroup(g, s, d, q, session.user.id, userConfigs); fetchData(); }}
+            onUpdateBatchGroup={async (g, s, d, q, op) => { if(!session?.user?.id) return; setLoadingData(true); await updateBatchGroup(g, s, d, q, op, session.user.id, userConfigs); fetchData(); }}
           />
         );
       case TabView.STATS:
