@@ -1,0 +1,27 @@
+
+name: Supabase Keep Alive
+
+on:
+  schedule:
+    # 每 3 天的凌晨 0:00 运行一次
+    - cron: "0 0 */3 * *"
+  workflow_dispatch: # 允许手动触发测试
+
+jobs:
+  ping_supabase:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Ping Supabase REST API
+        run: |
+          echo "正在连接到菌丝网络 (Supabase)..."
+          RESPONSE=$(curl -s -o /dev/null -w "%{http_code}" -X GET "${{ secrets.SUPABASE_URL }}/rest/v1/user_configs?select=config_key&limit=1" \
+          -H "apikey: ${{ secrets.SUPABASE_ANON_KEY }}" \
+          -H "Authorization: Bearer ${{ secrets.SUPABASE_ANON_KEY }}")
+          
+          if [ "$RESPONSE" -eq 200 ]; then
+            echo "✅ 成功！数据库状态：活跃 (HTTP 200)"
+          else
+            echo "❌ 失败！收到响应码：$RESPONSE"
+            echo "请检查 GitHub Secrets 中的 SUPABASE_URL 和 SUPABASE_ANON_KEY 是否正确。"
+            exit 1
+          fi
