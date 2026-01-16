@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Batch, UserConfigs, Unit } from '../types';
 import { addBatch, addBatchBulk, generateNextBatchIds, uploadBatchImage } from '../services/storageService';
-import { ArrowLeft, Check, History, Sprout, Loader2, Info, Camera, X, CircleDot, Image as ImageIcon } from 'lucide-react';
+import { ArrowLeft, Check, History, Sprout, Loader2, Info, Camera, X, CircleDot, Image as ImageIcon, AlertCircle } from 'lucide-react';
 
 interface OperationFormProps {
   onCancel: () => void;
@@ -48,38 +48,75 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCancel, onSuccess, init
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!operationType || !activeSpecies) return;
+    
+    // 基础验证
+    if (!operationType) {
+        alert("请选择操作步骤（如：接种、转接、收获等）");
+        return;
+    }
+    if (!activeSpecies) {
+        alert("未指定菌种");
+        return;
+    }
+
+    const safeQuantity = isNaN(quantity) ? 1 : quantity;
+
     setIsSubmitting(true);
     try {
         let createdBatchIds: string[] = [];
         let displayIds: string[] = [];
-        const isBulk = quantity > 1 && !isHarvest;
-        const count = isBulk ? quantity : 1;
+        const isBulk = safeQuantity > 1 && !isHarvest;
+        const count = isBulk ? Math.floor(safeQuantity) : 1;
 
+        // 生成显示 ID (例如 240520-OB-01)
         displayIds = await generateNextBatchIds(activeSpecies, createdDate, userConfigs.species, count);
         for (let i = 0; i < count; i++) createdBatchIds.push(crypto.randomUUID());
 
+        // 处理图片上传
         let uploadedImageUrl: string | null = null;
-        if (selectedImage) uploadedImageUrl = await uploadBatchImage(createdBatchIds[0], selectedImage, userId);
+        if (selectedImage) {
+            uploadedImageUrl = await uploadBatchImage(createdBatchIds[0], selectedImage, userId);
+        }
 
         const initialImages = uploadedImageUrl ? [uploadedImageUrl] : [];
 
         if (isBulk) {
             const newBatches: Batch[] = displayIds.map((id, i) => ({
-                id: createdBatchIds[i], displayId: id, createdDate, operationType,
-                species: activeSpecies, quantity: 1, unit, parentId: parentId || null,
-                notes, outcome: undefined, endDate: undefined, imageUrls: initialImages
+                id: createdBatchIds[i], 
+                displayId: id, 
+                createdDate, 
+                operationType,
+                species: activeSpecies, 
+                quantity: 1, 
+                unit, 
+                parentId: parentId || null,
+                notes, 
+                outcome: undefined, 
+                endDate: undefined, 
+                imageUrls: initialImages
             }));
             await addBatchBulk(newBatches, userId);
         } else {
             await addBatch({
-                id: createdBatchIds[0], displayId: displayIds[0], createdDate, operationType,
-                species: activeSpecies, quantity, unit: isHarvest ? 'g' : unit,
-                parentId: parentId || null, notes, imageUrls: initialImages
+                id: createdBatchIds[0], 
+                displayId: displayIds[0], 
+                createdDate, 
+                operationType,
+                species: activeSpecies, 
+                quantity: safeQuantity, 
+                unit: isHarvest ? 'g' : unit,
+                parentId: parentId || null, 
+                notes, 
+                imageUrls: initialImages
             }, userId);
         }
         onSuccess();
-    } catch (error: any) { alert("保存失败"); } finally { setIsSubmitting(false); }
+    } catch (error: any) { 
+        console.error("保存批次时发生错误:", error);
+        alert(`保存失败: ${error.message || '请检查网络或配置'}`); 
+    } finally { 
+        setIsSubmitting(false); 
+    }
   };
 
   return (
@@ -128,7 +165,15 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCancel, onSuccess, init
             <label className="block text-[10px] font-black uppercase tracking-widest text-earth-400 mb-1 ml-1">
               {isHarvest ? '收获克重' : '数量'}
             </label>
-            <input type="number" min="1" step={isHarvest ? "0.1" : "1"} required value={quantity} onChange={(e) => setQuantity(parseFloat(e.target.value))} className="w-full p-3 border border-earth-200 rounded-lg outline-none text-sm font-bold" />
+            <input 
+                type="number" 
+                min={isHarvest ? "0" : "1"} 
+                step={isHarvest ? "0.1" : "1"} 
+                required 
+                value={isNaN(quantity) ? '' : quantity} 
+                onChange={(e) => setQuantity(parseFloat(e.target.value))} 
+                className="w-full p-3 border border-earth-200 rounded-lg outline-none text-sm font-bold" 
+            />
           </div>
           {isHarvest && (
             <div>
@@ -143,7 +188,7 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCancel, onSuccess, init
         {quantity > 1 && !isHarvest && (
             <div className="p-3 rounded-lg border bg-blue-50 border-blue-100 flex gap-2">
                 <Info className="text-blue-500 mt-0.5 shrink-0" size={14} />
-                <p className="text-[10px] text-blue-800 font-black uppercase tracking-tight">将自动创建 {quantity} 条独立记录</p>
+                <p className="text-[10px] text-blue-800 font-black uppercase tracking-tight">将自动创建 {Math.floor(quantity)} 条独立记录</p>
             </div>
         )}
 
@@ -155,7 +200,6 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCancel, onSuccess, init
         <div>
             <label className="block text-[10px] font-black uppercase tracking-widest text-earth-400 mb-2 ml-1">记录照片</label>
             <div className="flex flex-col gap-3">
-                {/* 隐藏的 input 元素 */}
                 <input type="file" ref={cameraInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
                 <input type="file" ref={galleryInputRef} accept="image/*" className="hidden" onChange={handleImageSelect} />
 
