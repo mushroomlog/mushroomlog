@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Batch, UserConfigs, Unit } from '../types';
 import { addBatch, addBatchBulk, generateNextBatchIds, uploadBatchImage } from '../services/storageService';
-import { ArrowLeft, Check, History, Sprout, Loader2, Info, Camera, X, CircleDot, Image as ImageIcon, AlertCircle } from 'lucide-react';
+import { ArrowLeft, Check, History, Sprout, Loader2, Info, Camera, X, CircleDot, Image as ImageIcon } from 'lucide-react';
 
 interface OperationFormProps {
   onCancel: () => void;
@@ -25,6 +25,8 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCancel, onSuccess, init
 
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  
+  // 分别定义相机和图库的引用
   const cameraInputRef = useRef<HTMLInputElement>(null);
   const galleryInputRef = useRef<HTMLInputElement>(null);
 
@@ -48,38 +50,34 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCancel, onSuccess, init
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // 基础验证
-    if (!operationType) {
-        alert("请选择操作步骤（如：接种、转接、收获等）");
-        return;
+    if (!operationType || !activeSpecies) {
+      alert("请填写完整表单（选择步骤和菌种）");
+      return;
     }
-    if (!activeSpecies) {
-        alert("未指定菌种");
-        return;
-    }
-
-    const safeQuantity = isNaN(quantity) ? 1 : quantity;
 
     setIsSubmitting(true);
     try {
-        let createdBatchIds: string[] = [];
-        let displayIds: string[] = [];
+        // 增加数值安全性处理
+        const safeQuantity = isNaN(quantity) || quantity <= 0 ? 1 : quantity;
         const isBulk = safeQuantity > 1 && !isHarvest;
         const count = isBulk ? Math.floor(safeQuantity) : 1;
 
-        // 生成显示 ID (例如 240520-OB-01)
-        displayIds = await generateNextBatchIds(activeSpecies, createdDate, userConfigs.species, count);
-        for (let i = 0; i < count; i++) createdBatchIds.push(crypto.randomUUID());
+        console.log(`[菌丝网络] 准备保存记录: ${activeSpecies}, 数量: ${count}`);
 
-        // 处理图片上传
+        // 1. 生成显示 ID
+        const displayIds = await generateNextBatchIds(activeSpecies, createdDate, userConfigs.species, count);
+        const createdBatchIds = Array.from({ length: count }, () => crypto.randomUUID());
+
+        // 2. 上传图片（如果有）
         let uploadedImageUrl: string | null = null;
         if (selectedImage) {
+            console.log("[菌丝网络] 正在上传图片...");
             uploadedImageUrl = await uploadBatchImage(createdBatchIds[0], selectedImage, userId);
         }
 
         const initialImages = uploadedImageUrl ? [uploadedImageUrl] : [];
 
+        // 3. 写入数据库
         if (isBulk) {
             const newBatches: Batch[] = displayIds.map((id, i) => ({
                 id: createdBatchIds[i], 
@@ -110,10 +108,12 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCancel, onSuccess, init
                 imageUrls: initialImages
             }, userId);
         }
+        
+        console.log("[菌丝网络] 保存成功，触发刷新。");
         onSuccess();
     } catch (error: any) { 
-        console.error("保存批次时发生错误:", error);
-        alert(`保存失败: ${error.message || '请检查网络或配置'}`); 
+        console.error("[菌丝网络] 保存失败:", error);
+        alert("保存失败: " + (error.message || "未知错误")); 
     } finally { 
         setIsSubmitting(false); 
     }
@@ -165,15 +165,7 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCancel, onSuccess, init
             <label className="block text-[10px] font-black uppercase tracking-widest text-earth-400 mb-1 ml-1">
               {isHarvest ? '收获克重' : '数量'}
             </label>
-            <input 
-                type="number" 
-                min={isHarvest ? "0" : "1"} 
-                step={isHarvest ? "0.1" : "1"} 
-                required 
-                value={isNaN(quantity) ? '' : quantity} 
-                onChange={(e) => setQuantity(parseFloat(e.target.value))} 
-                className="w-full p-3 border border-earth-200 rounded-lg outline-none text-sm font-bold" 
-            />
+            <input type="number" min="0.1" step={isHarvest ? "0.1" : "1"} required value={quantity} onChange={(e) => setQuantity(parseFloat(e.target.value))} className="w-full p-3 border border-earth-200 rounded-lg outline-none text-sm font-bold" />
           </div>
           {isHarvest && (
             <div>
@@ -198,25 +190,26 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCancel, onSuccess, init
         </div>
 
         <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-earth-400 mb-2 ml-1">记录照片</label>
-            <div className="flex flex-col gap-3">
+            <label className="block text-[10px] font-black uppercase tracking-widest text-earth-400 mb-2 ml-1">现场照片</label>
+            <div className="space-y-3">
+                {/* 隐藏的文件输入框 */}
                 <input type="file" ref={cameraInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
                 <input type="file" ref={galleryInputRef} accept="image/*" className="hidden" onChange={handleImageSelect} />
 
                 {!selectedImage ? (
                     <div className="grid grid-cols-2 gap-2">
-                        <button type="button" onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-2 px-4 py-3 bg-earth-50 border border-earth-200 rounded-lg text-earth-600 justify-center transition-all active:scale-95">
+                        <button type="button" onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-2 px-4 py-3 bg-earth-50 border border-earth-200 rounded-xl text-earth-600 justify-center transition-all active:scale-95 hover:bg-earth-100">
                             <Camera size={18} />
                             <span className="text-[10px] font-black uppercase tracking-widest">拍照记录</span>
                         </button>
-                        <button type="button" onClick={() => galleryInputRef.current?.click()} className="flex items-center gap-2 px-4 py-3 bg-earth-50 border border-earth-200 rounded-lg text-earth-600 justify-center transition-all active:scale-95">
+                        <button type="button" onClick={() => galleryInputRef.current?.click()} className="flex items-center gap-2 px-4 py-3 bg-earth-50 border border-earth-200 rounded-xl text-earth-600 justify-center transition-all active:scale-95 hover:bg-earth-100">
                             <ImageIcon size={18} />
-                            <span className="text-[10px] font-black uppercase tracking-widest">从相册选择</span>
+                            <span className="text-[10px] font-black uppercase tracking-widest">添加照片</span>
                         </button>
                     </div>
                 ) : (
-                    <div className="flex items-center gap-2 p-2 border border-earth-200 rounded-lg bg-earth-50 w-full">
-                        <img src={previewUrl!} className="w-10 h-10 rounded object-cover" />
+                    <div className="flex items-center gap-2 p-2 border border-earth-200 rounded-lg bg-earth-50 w-full animate-in fade-in slide-in-from-bottom-2">
+                        <img src={previewUrl!} className="w-10 h-10 rounded object-cover shadow-sm" />
                         <span className="text-[10px] font-black text-earth-900 truncate flex-1">{selectedImage.name}</span>
                         <button type="button" onClick={() => { setSelectedImage(null); setPreviewUrl(null); }} className="p-1 text-earth-300 hover:text-red-500"><X size={16} /></button>
                     </div>
