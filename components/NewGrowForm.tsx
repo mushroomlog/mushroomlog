@@ -2,7 +2,7 @@
 import React, { useState, useMemo, useEffect, useRef } from 'react';
 import { Batch, UserConfigs, Unit } from '../types';
 import { addBatch, addBatchBulk, generateNextBatchIds, uploadBatchImage } from '../services/storageService';
-import { ArrowLeft, Check, History, Sprout, Loader2, Info, Camera, X, CircleDot } from 'lucide-react';
+import { ArrowLeft, Check, History, Sprout, Loader2, Info, Camera, X, CircleDot, Image as ImageIcon } from 'lucide-react';
 
 interface OperationFormProps {
   onCancel: () => void;
@@ -25,7 +25,8 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCancel, onSuccess, init
 
   const [selectedImage, setSelectedImage] = useState<File | null>(null);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
-  const fileInputRef = useRef<HTMLInputElement>(null);
+  const cameraInputRef = useRef<HTMLInputElement>(null);
+  const galleryInputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
     if (!selectedSpecies && userConfigs.species.length > 0) {
@@ -152,14 +153,23 @@ const OperationForm: React.FC<OperationFormProps> = ({ onCancel, onSuccess, init
         </div>
 
         <div>
-            <label className="block text-[10px] font-black uppercase tracking-widest text-earth-400 mb-2 ml-1">现场照片</label>
-            <div className="flex items-center gap-3">
-                <input type="file" ref={fileInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
+            <label className="block text-[10px] font-black uppercase tracking-widest text-earth-400 mb-2 ml-1">记录照片</label>
+            <div className="flex flex-col gap-3">
+                {/* 隐藏的 input 元素 */}
+                <input type="file" ref={cameraInputRef} accept="image/*" capture="environment" className="hidden" onChange={handleImageSelect} />
+                <input type="file" ref={galleryInputRef} accept="image/*" className="hidden" onChange={handleImageSelect} />
+
                 {!selectedImage ? (
-                    <button type="button" onClick={() => fileInputRef.current?.click()} className="flex items-center gap-2 px-4 py-3 bg-earth-50 border border-earth-200 rounded-lg text-earth-600 w-full justify-center transition-all active:scale-95">
-                        <Camera size={18} />
-                        <span className="text-[10px] font-black uppercase tracking-widest">拍照记录</span>
-                    </button>
+                    <div className="grid grid-cols-2 gap-2">
+                        <button type="button" onClick={() => cameraInputRef.current?.click()} className="flex items-center gap-2 px-4 py-3 bg-earth-50 border border-earth-200 rounded-lg text-earth-600 justify-center transition-all active:scale-95">
+                            <Camera size={18} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">拍照记录</span>
+                        </button>
+                        <button type="button" onClick={() => galleryInputRef.current?.click()} className="flex items-center gap-2 px-4 py-3 bg-earth-50 border border-earth-200 rounded-lg text-earth-600 justify-center transition-all active:scale-95">
+                            <ImageIcon size={18} />
+                            <span className="text-[10px] font-black uppercase tracking-widest">从相册选择</span>
+                        </button>
+                    </div>
                 ) : (
                     <div className="flex items-center gap-2 p-2 border border-earth-200 rounded-lg bg-earth-50 w-full">
                         <img src={previewUrl!} className="w-10 h-10 rounded object-cover" />
